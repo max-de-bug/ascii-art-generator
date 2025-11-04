@@ -1,3 +1,4 @@
+"use client";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAsciiStore } from "../../store/ascii-store";

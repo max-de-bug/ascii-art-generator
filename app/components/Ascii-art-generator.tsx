@@ -1,3 +1,4 @@
+"use client";
 import { Button } from "@/components/ui/button";
 import { useAsciiStore } from "./store/ascii-store";
 
@@ -22,8 +23,8 @@ const AsciiGenerator = () => {
     document.body.removeChild(element);
   };
   return (
-    <main className="flex-1 overflow-y-auto p-12 bg-background flex items-center justify-center">
-      <div className="w-full max-w-3xl h-full max-h-screen flex flex-col justify-center">
+    <main className="flex-1 overflow-y-auto p-6 bg-background flex justify-center">
+      <div className="w-full max-w-3xl flex flex-col">
         <div className="flex flex-col gap-8">
           <div className="flex gap-3 justify-center pt-6">
             <Button

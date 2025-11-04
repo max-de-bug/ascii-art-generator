@@ -24,9 +24,6 @@ export function Header() {
             <ModeToggle />
           </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          Transform text and images into beautiful ASCII art with ease.
-        </p>
       </div>
     </header>
   );

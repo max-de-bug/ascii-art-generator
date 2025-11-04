@@ -1,3 +1,4 @@
+"use client";
 import { Input } from "@/components/ui/input";
 import { useRef } from "react";
 import { useAsciiStore } from "../../store/ascii-store";
