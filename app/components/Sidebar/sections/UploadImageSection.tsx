@@ -1,12 +1,14 @@
 "use client";
 import { Input } from "@/components/ui/input";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useAsciiStore } from "../../store/ascii-store";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { ASCII_CHARS } from "../../store/ascii-store";
+import Image from "next/image";
 export const UploadImageSection = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const {
     imageFile,
     setImageFile,
@@ -22,12 +24,22 @@ export const UploadImageSection = () => {
     asciiOutput,
   } = useAsciiStore();
 
+  useEffect(() => {
+    if (imageFile) {
+      const url = URL.createObjectURL(imageFile);
+      setPreviewUrl(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setPreviewUrl(null);
+    }
+  }, [imageFile]);
+
   const generateFromImage = async () => {
     if (!imageFile) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => {
-      const img = new Image();
+    reader.onload = async (e: ProgressEvent<FileReader>) => {
+      const img = document.createElement("img");
       img.crossOrigin = "anonymous";
       img.onload = () => {
         const canvas = document.createElement("canvas");
@@ -111,7 +123,7 @@ export const UploadImageSection = () => {
       <div className="space-y-3">
         <div>
           <Label className="text-xs text-muted-foreground mb-2 block">
-            Image File:
+            Image:
           </Label>
           <Input
             ref={fileInputRef}
@@ -121,9 +133,18 @@ export const UploadImageSection = () => {
             className="bg-input border-border text-foreground text-xs"
           />
           {imageFile && (
-            <p className="text-xs text-accent mt-2 font-medium">
-              ✓ {imageFile.name}
-            </p>
+            <div className="mt-2 space-y-2">
+              <p className="text-xs text-muted-foreground">{imageFile.name}</p>
+              {previewUrl && (
+                <Image
+                  width={100}
+                  height={100}
+                  src={previewUrl}
+                  alt="Preview"
+                  className="w-full rounded border border-border object-contain max-h-32"
+                />
+              )}
+            </div>
           )}
         </div>
         <Button
@@ -131,7 +152,7 @@ export const UploadImageSection = () => {
           disabled={!imageFile}
           className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
-          🖼️ Generate from Image
+          Generate
         </Button>
       </div>
     </section>
