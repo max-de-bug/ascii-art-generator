@@ -9,7 +9,7 @@ export const ResetButton = () => {
     <section>
       <Button
         onClick={resetAllSettings}
-        className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+        className="w-full bg-destructive hover:bg-destructive/90 text-destructive-foreground cursor-pointer"
       >
         Reset All Settings
       </Button>

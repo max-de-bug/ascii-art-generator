@@ -3,12 +3,54 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAsciiStore } from "../../store/ascii-store";
+import {
+  convertCanvasToAscii,
+  createCanvasFromText,
+} from "../../utils/ascii-converter";
 
 const GenerateTextSection = () => {
-  const { inputText, setInputText } = useAsciiStore();
+  const {
+    inputText,
+    setInputText,
+    asciiWidth,
+    brightness,
+    contrast,
+    blur,
+    invert,
+    charset,
+    manualChar,
+    ignoreWhite,
+    dithering,
+    ditherAlgorithm,
+    edgeMethod,
+    edgeThreshold,
+    dogThreshold,
+    setAsciiOutput,
+  } = useAsciiStore();
 
   const generateFromText = () => {
-    console.log("Generating from text...");
+    if (!inputText.trim()) return;
+
+    const width = Math.floor(asciiWidth[0]);
+    const canvas = createCanvasFromText(inputText, width, blur);
+
+    const ascii = convertCanvasToAscii({
+      canvas,
+      width,
+      invert,
+      charset,
+      manualChar,
+      ignoreWhite,
+      dithering,
+      ditherAlgorithm,
+      edgeMethod,
+      edgeThreshold,
+      dogThreshold,
+      brightness,
+      contrast,
+    });
+
+    setAsciiOutput(ascii);
   };
   return (
     <section>
@@ -34,7 +76,7 @@ const GenerateTextSection = () => {
         <Button
           onClick={generateFromText}
           disabled={!inputText.trim()}
-          className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
           Generate
         </Button>

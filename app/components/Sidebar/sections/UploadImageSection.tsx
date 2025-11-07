@@ -4,8 +4,11 @@ import { useRef, useState, useEffect } from "react";
 import { useAsciiStore } from "../../store/ascii-store";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { ASCII_CHARS } from "../../store/ascii-store";
 import Image from "next/image";
+import {
+  convertCanvasToAscii,
+  createCanvasFromImage,
+} from "../../utils/ascii-converter";
 export const UploadImageSection = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -20,8 +23,12 @@ export const UploadImageSection = () => {
     charset,
     manualChar,
     ignoreWhite,
+    dithering,
+    ditherAlgorithm,
+    edgeMethod,
+    edgeThreshold,
+    dogThreshold,
     setAsciiOutput,
-    asciiOutput,
   } = useAsciiStore();
 
   useEffect(() => {
@@ -31,6 +38,10 @@ export const UploadImageSection = () => {
       return () => URL.revokeObjectURL(url);
     } else {
       setPreviewUrl(null);
+      // Clear the file input when imageFile is reset
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   }, [imageFile]);
 
@@ -42,77 +53,30 @@ export const UploadImageSection = () => {
       const img = document.createElement("img");
       img.crossOrigin = "anonymous";
       img.onload = () => {
-        const canvas = document.createElement("canvas");
         const width = Math.floor(asciiWidth[0]);
-        const height = Math.floor((img.height / img.width) * width * 0.55);
+        const canvas = createCanvasFromImage(img, width, blur);
 
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        ctx.filter = `brightness(${100 + brightness[0]}%) contrast(${
-          100 + contrast[0]
-        }%) blur(${blur[0]}px)`;
-        ctx.drawImage(img, 0, 0, width, height);
-
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-
-        if (invert) {
-          for (let i = 0; i < data.length; i += 4) {
-            data[i] = 255 - data[i];
-            data[i + 1] = 255 - data[i + 1];
-            data[i + 2] = 255 - data[i + 2];
-          }
-        }
-
-        let ascii = "";
-        const chars = charset === "manual" ? manualChar : ASCII_CHARS[charset];
-        const charArray = chars.split("");
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const a = data[i + 3];
-
-          if (ignoreWhite && r === 255 && g === 255 && b === 255) {
-            ascii += " ";
-          } else {
-            const brightness = (r + g + b) / 3 / 255;
-            const charIndex = Math.floor(brightness * (charArray.length - 1));
-            ascii += charArray[charIndex];
-          }
-
-          if ((i / 4 + 1) % width === 0) {
-            ascii += "\n";
-          }
-        }
+        const ascii = convertCanvasToAscii({
+          canvas,
+          width,
+          invert,
+          charset,
+          manualChar,
+          ignoreWhite,
+          dithering,
+          ditherAlgorithm,
+          edgeMethod,
+          edgeThreshold,
+          dogThreshold,
+          brightness,
+          contrast,
+        });
 
         setAsciiOutput(ascii);
       };
       img.src = e.target?.result as string;
     };
     reader.readAsDataURL(imageFile);
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(asciiOutput);
-  };
-
-  const downloadAsFile = () => {
-    const element = document.createElement("a");
-    element.setAttribute(
-      "href",
-      "data:text/plain;charset=utf-8," + encodeURIComponent(asciiOutput)
-    );
-    element.setAttribute("download", "ascii-art.txt");
-    element.style.display = "none";
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
   };
 
   return (
@@ -150,7 +114,7 @@ export const UploadImageSection = () => {
         <Button
           onClick={generateFromImage}
           disabled={!imageFile}
-          className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+          className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
           Generate
         </Button>

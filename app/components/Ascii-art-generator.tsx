@@ -1,47 +1,15 @@
 "use client";
-import { Button } from "@/components/ui/button";
 import { useAsciiStore } from "./store/ascii-store";
+import { AsciiActions } from "./AsciiActions";
 
 const AsciiGenerator = () => {
   const { asciiOutput, zoom } = useAsciiStore();
 
-  const copyToClipboard = () => {
-    if (!asciiOutput) return;
-    navigator.clipboard.writeText(asciiOutput);
-  };
-
-  const downloadAsFile = () => {
-    const element = document.createElement("a");
-    element.setAttribute(
-      "href",
-      "data:text/plain;charset=utf-8," + encodeURIComponent(asciiOutput)
-    );
-    element.setAttribute("download", "ascii-art.txt");
-    element.style.display = "none";
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
-  };
   return (
     <main className="flex-1 overflow-y-auto p-6 bg-background flex justify-center">
       <div className="w-full max-w-3xl flex flex-col">
         <div className="flex flex-col gap-8">
-          <div className="flex gap-3 justify-center pt-6">
-            <Button
-              onClick={copyToClipboard}
-              disabled={!asciiOutput}
-              className="px-6 py-2 bg-primary hover:bg-primary/80 text-primary-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs uppercase tracking-wide"
-            >
-              Copy
-            </Button>
-            <Button
-              onClick={downloadAsFile}
-              disabled={!asciiOutput}
-              className="px-6 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs uppercase tracking-wide"
-            >
-              Download
-            </Button>
-          </div>
+          <AsciiActions asciiOutput={asciiOutput} />
           <div>
             <h1 className="text-4xl font-bold text-foreground mb-2">
               ASCII Art
