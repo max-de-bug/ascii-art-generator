@@ -427,7 +427,9 @@ export const convertCanvasToAscii = ({
   contrast,
 }: ConvertToAsciiOptions): string => {
   const height = canvas.height;
-  const imageData = canvas.getContext("2d")?.getImageData(0, 0, width, height);
+  const imageData = canvas
+    .getContext("2d", { alpha: false })
+    ?.getImageData(0, 0, width, height);
   if (!imageData) return "";
 
   const data = imageData.data;
@@ -588,7 +590,7 @@ export const processCanvasWithFilters = ({
   height,
   blur,
 }: ProcessCanvasOptions): void => {
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return;
 
   // Apply blur filter (brightness/contrast are applied in conversion)
@@ -607,7 +609,7 @@ export const getOrCreateCanvas = (
     existingCanvas.height === height
   ) {
     // Reuse existing canvas if dimensions match
-    const ctx = existingCanvas.getContext("2d");
+    const ctx = existingCanvas.getContext("2d", { alpha: false });
     if (ctx) {
       ctx.clearRect(0, 0, width, height);
     }
@@ -632,7 +634,7 @@ export const createCanvasFromImage = (
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return canvas;
 
   processCanvasWithFilters({ canvas, width, height, blur });
@@ -652,14 +654,14 @@ export const createCanvasFromText = (
   canvas.width = width;
   canvas.height = height;
 
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return canvas;
 
   // Create temporary canvas for text
   const tempCanvas = document.createElement("canvas");
   tempCanvas.width = width;
   tempCanvas.height = height;
-  const tempCtx = tempCanvas.getContext("2d");
+  const tempCtx = tempCanvas.getContext("2d", { alpha: false });
   if (!tempCtx) return canvas;
 
   // Draw text on temp canvas

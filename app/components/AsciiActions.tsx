@@ -25,7 +25,7 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
 
     // Calculate canvas dimensions
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     ctx.font = `600 ${fontSize}px "Geist Mono", monospace`;
