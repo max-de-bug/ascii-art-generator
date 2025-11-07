@@ -682,3 +682,83 @@ export const createCanvasFromText = (
 
   return canvas;
 };
+
+// Shared generation function that works for both image and text
+interface GenerateAsciiOptions {
+  asciiWidth: number[];
+  brightness: number[];
+  contrast: number[];
+  blur: number[];
+  invert: boolean;
+  charset: keyof typeof ASCII_CHARS;
+  manualChar: string;
+  ignoreWhite: boolean;
+  dithering: boolean;
+  ditherAlgorithm: string;
+  edgeMethod: string;
+  edgeThreshold: number[];
+  dogThreshold: number[];
+  setAsciiOutput: (output: string) => void;
+}
+
+export const generateAsciiFromImage = (
+  imageDataUrl: string,
+  options: GenerateAsciiOptions
+): void => {
+  const img = document.createElement("img");
+  img.crossOrigin = "anonymous";
+  img.onload = () => {
+    const width = Math.floor(options.asciiWidth[0]);
+    const canvas = createCanvasFromImage(img, width, options.blur);
+
+    const ascii = convertCanvasToAscii({
+      canvas,
+      width,
+      invert: options.invert,
+      charset: options.charset,
+      manualChar: options.manualChar,
+      ignoreWhite: options.ignoreWhite,
+      dithering: options.dithering,
+      ditherAlgorithm: options.ditherAlgorithm,
+      edgeMethod: options.edgeMethod,
+      edgeThreshold: options.edgeThreshold,
+      dogThreshold: options.dogThreshold,
+      brightness: options.brightness,
+      contrast: options.contrast,
+    });
+
+    options.setAsciiOutput(ascii);
+  };
+  img.src = imageDataUrl;
+};
+
+export const generateAsciiFromText = (
+  text: string,
+  options: GenerateAsciiOptions
+): void => {
+  if (!text.trim()) {
+    options.setAsciiOutput("");
+    return;
+  }
+
+  const width = Math.floor(options.asciiWidth[0]);
+  const canvas = createCanvasFromText(text, width, options.blur);
+
+  const ascii = convertCanvasToAscii({
+    canvas,
+    width,
+    invert: options.invert,
+    charset: options.charset,
+    manualChar: options.manualChar,
+    ignoreWhite: options.ignoreWhite,
+    dithering: options.dithering,
+    ditherAlgorithm: options.ditherAlgorithm,
+    edgeMethod: options.edgeMethod,
+    edgeThreshold: options.edgeThreshold,
+    dogThreshold: options.dogThreshold,
+    brightness: options.brightness,
+    contrast: options.contrast,
+  });
+
+  options.setAsciiOutput(ascii);
+};

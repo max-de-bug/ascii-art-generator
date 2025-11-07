@@ -15,7 +15,7 @@ const AsciiGenerator = () => {
               ASCII Art
             </h1>
             <p className="text-muted-foreground text-sm">
-              Your generaten artwork
+              Your generated artwork
             </p>
           </div>
           <div className="aspect-square bg-card border border-border rounded-lg overflow-hidden flex items-center justify-center">

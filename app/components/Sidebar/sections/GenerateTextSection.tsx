@@ -2,13 +2,11 @@
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useEffect, useCallback, useRef } from "react";
 import { useAsciiStore } from "../../store/ascii-store";
-import {
-  convertCanvasToAscii,
-  createCanvasFromText,
-} from "../../utils/ascii-converter";
+import { generateAsciiFromText } from "../../utils/ascii-converter";
 
-const GenerateTextSection = () => {
+export const GenerateTextSection = () => {
   const {
     inputText,
     setInputText,
@@ -28,15 +26,13 @@ const GenerateTextSection = () => {
     setAsciiOutput,
   } = useAsciiStore();
 
-  const generateFromText = () => {
-    if (!inputText.trim()) return;
-
-    const width = Math.floor(asciiWidth[0]);
-    const canvas = createCanvasFromText(inputText, width, blur);
-
-    const ascii = convertCanvasToAscii({
-      canvas,
-      width,
+  // Real-time regeneration function - updates immediately on settings change
+  const regenerateAscii = useCallback(() => {
+    generateAsciiFromText(inputText, {
+      asciiWidth,
+      brightness,
+      contrast,
+      blur,
       invert,
       charset,
       manualChar,
@@ -46,12 +42,48 @@ const GenerateTextSection = () => {
       edgeMethod,
       edgeThreshold,
       dogThreshold,
-      brightness,
-      contrast,
+      setAsciiOutput,
+    });
+  }, [
+    inputText,
+    asciiWidth,
+    brightness,
+    contrast,
+    blur,
+    invert,
+    charset,
+    manualChar,
+    ignoreWhite,
+    dithering,
+    ditherAlgorithm,
+    edgeMethod,
+    edgeThreshold,
+    dogThreshold,
+    setAsciiOutput,
+  ]);
+
+  // Real-time regeneration using requestAnimationFrame for smooth updates
+  const rafIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Cancel any pending frame before scheduling a new one
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      regenerateAscii();
+      rafIdRef.current = null;
     });
 
-    setAsciiOutput(ascii);
-  };
+    return () => {
+      // Cleanup: cancel pending frame when effect re-runs or component unmounts
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+    };
+  }, [regenerateAscii]);
   return (
     <section>
       <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
@@ -74,7 +106,7 @@ const GenerateTextSection = () => {
           />
         </div>
         <Button
-          onClick={generateFromText}
+          onClick={regenerateAscii}
           disabled={!inputText.trim()}
           className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
@@ -84,4 +116,3 @@ const GenerateTextSection = () => {
     </section>
   );
 };
-export default GenerateTextSection;

@@ -1,17 +1,15 @@
 "use client";
 import { Input } from "@/components/ui/input";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { useAsciiStore } from "../../store/ascii-store";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
-import {
-  convertCanvasToAscii,
-  createCanvasFromImage,
-} from "../../utils/ascii-converter";
-export const UploadImageSection = () => {
+import { generateAsciiFromImage } from "../../utils/ascii-converter";
+export const GenerateImageSection = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const {
     imageFile,
     setImageFile,
@@ -31,53 +29,91 @@ export const UploadImageSection = () => {
     setAsciiOutput,
   } = useAsciiStore();
 
+  // Load image data when file changes
   useEffect(() => {
     if (imageFile) {
       const url = URL.createObjectURL(imageFile);
       setPreviewUrl(url);
+
+      const reader = new FileReader();
+      reader.onload = (e: ProgressEvent<FileReader>) => {
+        const dataUrl = e.target?.result as string;
+        setImageDataUrl(dataUrl);
+      };
+      reader.readAsDataURL(imageFile);
+
       return () => URL.revokeObjectURL(url);
     } else {
       setPreviewUrl(null);
-      // Clear the file input when imageFile is reset
+      setImageDataUrl(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
     }
   }, [imageFile]);
 
-  const generateFromImage = async () => {
-    if (!imageFile) return;
+  // Real-time regeneration function - updates immediately on settings change
+  const regenerateAscii = useCallback(() => {
+    if (!imageDataUrl) return;
 
-    const reader = new FileReader();
-    reader.onload = async (e: ProgressEvent<FileReader>) => {
-      const img = document.createElement("img");
-      img.crossOrigin = "anonymous";
-      img.onload = () => {
-        const width = Math.floor(asciiWidth[0]);
-        const canvas = createCanvasFromImage(img, width, blur);
+    generateAsciiFromImage(imageDataUrl, {
+      asciiWidth,
+      brightness,
+      contrast,
+      blur,
+      invert,
+      charset,
+      manualChar,
+      ignoreWhite,
+      dithering,
+      ditherAlgorithm,
+      edgeMethod,
+      edgeThreshold,
+      dogThreshold,
+      setAsciiOutput,
+    });
+  }, [
+    imageDataUrl,
+    asciiWidth,
+    brightness,
+    contrast,
+    blur,
+    invert,
+    charset,
+    manualChar,
+    ignoreWhite,
+    dithering,
+    ditherAlgorithm,
+    edgeMethod,
+    edgeThreshold,
+    dogThreshold,
+    setAsciiOutput,
+  ]);
 
-        const ascii = convertCanvasToAscii({
-          canvas,
-          width,
-          invert,
-          charset,
-          manualChar,
-          ignoreWhite,
-          dithering,
-          ditherAlgorithm,
-          edgeMethod,
-          edgeThreshold,
-          dogThreshold,
-          brightness,
-          contrast,
-        });
+  // Real-time regeneration using requestAnimationFrame for smooth updates
+  const rafIdRef = useRef<number | null>(null);
 
-        setAsciiOutput(ascii);
-      };
-      img.src = e.target?.result as string;
+  useEffect(() => {
+    if (!imageDataUrl) return;
+
+    // Cancel any pending frame before scheduling a new one
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+    }
+
+    rafIdRef.current = requestAnimationFrame(() => {
+      regenerateAscii();
+      rafIdRef.current = null;
+    });
+
+    return () => {
+      // Cleanup: cancel pending frame when effect re-runs or component unmounts
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
     };
-    reader.readAsDataURL(imageFile);
-  };
+  }, [imageDataUrl, regenerateAscii]);
 
   return (
     <section>
@@ -112,7 +148,7 @@ export const UploadImageSection = () => {
           )}
         </div>
         <Button
-          onClick={generateFromImage}
+          onClick={regenerateAscii}
           disabled={!imageFile}
           className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
         >
