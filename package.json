@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run build:wasm && next build",
+    "build:wasm": "cd wasm-ascii && wasm-pack build --target web --out-dir pkg",
+    "build:wasm:dev": "cd wasm-ascii && wasm-pack build --target web --out-dir pkg --dev",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "dev:webpack": "next dev --webpack",
+    "build:webpack": "npm run build:wasm && next build --webpack"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.3",
