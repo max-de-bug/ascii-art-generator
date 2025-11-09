@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ModeToggle } from "./mode-toggle";
 import { WalletButton } from "./WalletButton";
+import { Navbar } from "./Navbar";
 
 export function Header() {
   return (
@@ -13,11 +14,12 @@ export function Header() {
                 {"<>"}
               </span>
             </div>
-            <h1>
+            <h1 className="m-0">
               <Link href="/" className="text-2xl font-bold">
                 ASCII Art Generator
               </Link>
             </h1>
+            <Navbar />
           </div>
           <div className="flex items-center gap-3">
             <WalletButton />

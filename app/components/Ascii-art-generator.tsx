@@ -1,6 +1,8 @@
 "use client";
 import { useAsciiStore } from "./store/ascii-store";
 import { AsciiActions } from "./AsciiActions";
+import { Button } from "@/components/ui/button";
+import { MintButton } from "./MintButton";
 
 const AsciiGenerator = () => {
   const { asciiOutput, zoom } = useAsciiStore();
@@ -41,6 +43,7 @@ const AsciiGenerator = () => {
             </div>
           </div>
         </div>
+        <MintButton />
       </div>
     </main>
   );
