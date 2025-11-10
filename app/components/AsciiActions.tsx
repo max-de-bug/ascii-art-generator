@@ -20,6 +20,84 @@ interface AsciiActionsProps {
   asciiOutput: string;
 }
 
+// Export createImageBlob for use in other components (e.g., MintButton)
+export const createImageBlob = (
+  asciiOutput: string,
+  zoom: number[],
+  backgroundColor: string = "#000000"
+): Promise<Blob | null> => {
+  // Early return checks (synchronous - no Promise needed)
+  if (!asciiOutput) {
+    return Promise.resolve(null);
+  }
+
+  const lines = asciiOutput
+    .split("\n")
+    .filter((line) => line.trim().length > 0);
+  if (lines.length === 0) {
+    return Promise.resolve(null);
+  }
+
+  // Use minimal padding to maximize canvas usage
+  const padding = 20;
+  const baseFontSize = (zoom[0] / 100) * 12;
+  const lineHeightMultiplier = 1.1;
+
+  // Calculate canvas dimensions
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  if (!ctx) {
+    return Promise.resolve(null);
+  }
+
+  // First pass: measure text with base font size
+  ctx.font = `600 ${baseFontSize}px "Geist Mono", monospace`;
+  ctx.textBaseline = "top";
+
+  let maxWidth = 0;
+  lines.forEach((line) => {
+    const metrics = ctx.measureText(line);
+    maxWidth = Math.max(maxWidth, metrics.width);
+  });
+
+  const baseLineHeight = baseFontSize * lineHeightMultiplier;
+  const baseHeight = lines.length * baseLineHeight;
+
+  // Calculate target canvas size (use text dimensions with minimal padding)
+  // Scale to ensure text fills the canvas better
+  const targetWidth = maxWidth + padding * 2;
+  const targetHeight = baseHeight + padding * 2;
+
+  // Set canvas dimensions
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+
+  // Re-apply context settings after canvas resize (resetting canvas clears context)
+  ctx.fillStyle = backgroundColor;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Draw text (left-aligned with padding) - ensure contrast with background
+  ctx.fillStyle =
+    backgroundColor.toLowerCase() === "#000000" ? "#ffffff" : "#000000";
+  ctx.font = `600 ${baseFontSize}px "Geist Mono", monospace`;
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left";
+
+  const lineHeight = baseFontSize * lineHeightMultiplier;
+  lines.forEach((line, index) => {
+    const x = padding;
+    const y = padding + index * lineHeight;
+    ctx.fillText(line, x, y);
+  });
+
+  // Convert to PNG blob - Promise is only needed here because toBlob uses a callback
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      resolve(blob);
+    }, "image/png");
+  });
+};
+
 export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
   const { zoom } = useAsciiStore();
 
@@ -28,60 +106,10 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
     navigator.clipboard.writeText(asciiOutput);
   };
 
-  const createImageBlob = (): Promise<Blob | null> => {
-    // Early return checks (synchronous - no Promise needed)
-    if (!asciiOutput) {
-      return Promise.resolve(null);
-    }
-
-    const lines = asciiOutput.split("\n");
-    const fontSize = (zoom[0] / 100) * 12;
-    const lineHeight = fontSize * 1.1;
-    const padding = 40;
-
-    // Calculate canvas dimensions
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) {
-      return Promise.resolve(null);
-    }
-
-    ctx.font = `600 ${fontSize}px "Geist Mono", monospace`;
-    ctx.textBaseline = "top";
-
-    // Measure text to determine canvas size
-    let maxWidth = 0;
-    lines.forEach((line) => {
-      const metrics = ctx.measureText(line);
-      maxWidth = Math.max(maxWidth, metrics.width);
-    });
-
-    canvas.width = maxWidth + padding * 2;
-    canvas.height = lines.length * lineHeight + padding * 2;
-
-    // Set background
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Draw text (centered horizontally)
-    ctx.fillStyle = "#000000";
-    ctx.font = `600 ${fontSize}px "Geist Mono", monospace`;
-    ctx.textBaseline = "top";
-    ctx.textAlign = "center";
-    ctx.letterSpacing = "-0.5px";
-
-    lines.forEach((line, index) => {
-      const x = canvas.width / 2;
-      const y = padding + index * lineHeight;
-      ctx.fillText(line, x, y);
-    });
-
-    // Convert to PNG blob - Promise is only needed here because toBlob uses a callback
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        resolve(blob);
-      }, "image/png");
-    });
+  const createImageBlobLocal = (
+    backgroundColor: string = "#000000"
+  ): Promise<Blob | null> => {
+    return createImageBlob(asciiOutput, zoom, backgroundColor);
   };
 
   const shareToTwitter = async () => {
@@ -89,7 +117,7 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
 
     try {
       // Create the image blob
-      const blob = await createImageBlob();
+      const blob = await createImageBlobLocal();
       if (!blob) {
         toast.error("Failed to create image. Please try again.");
         return;
@@ -97,12 +125,6 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
 
       // Check if Clipboard API is available
       if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
-        // Fallback: open Twitter and show instructions
-        const text = `Check out this ASCII art I generated!`;
-        const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
-          text
-        )}`;
-        window.open(twitterUrl, "_blank");
         toast.error(
           "Clipboard API not supported. Please download the image and upload it manually to Twitter."
         );
@@ -133,14 +155,13 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
       toast.error(
         "Failed to copy to clipboard. The image will be downloaded instead. You can then upload it to Twitter manually."
       );
-      downloadAsFile();
     }
   };
 
   const downloadAsFile = async () => {
     if (!asciiOutput) return;
 
-    const blob = await createImageBlob();
+    const blob = await createImageBlobLocal();
     if (!blob) {
       toast.error("Failed to create image. Please try again.");
       return;
