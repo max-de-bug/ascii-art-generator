@@ -214,7 +214,7 @@ export async function mintAsciiArtNFTAnchor({
     }
     // Try to load the IDL from the generated file
     const idlModule = await import(
-      "../../components/smartcontracts/ascii/target/idl/ascii.json"
+      "../smartcontracts/ascii/target/idl/ascii.json"
     );
     idl = idlModule.default || idlModule;
   } catch (error) {

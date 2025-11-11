@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "./components/Providers/theme-provider";
-import { WalletContextProvider } from "./components/Providers/wallet-provider";
+import { ThemeProvider } from "./Components/Providers/theme-provider";
+import { WalletContextProvider } from "./Components/Providers/wallet-provider";
 
 import { Toaster } from "@/components/ui/sonner";
 

@@ -1,7 +1,7 @@
-import { Footer } from "./components/Footer";
-import { Header } from "./components/Header";
-import AsciiArtGenerator from "./components/Ascii-art-generator";
-import Sidebar from "./components/Sidebar/Sidebar";
+import { Footer } from "./Components/Footer";
+import { Header } from "./Components/Header";
+import AsciiArtGenerator from "./Components/Ascii-art-generator";
+import Sidebar from "./Components/Sidebar/Sidebar";
 
 export default function Home() {
   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import { PageLayout } from "../components/PageLayout";
+import { PageLayout } from "../Components/PageLayout";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useEffect, useState } from "react";
