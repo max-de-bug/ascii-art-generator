@@ -1,11 +1,9 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useEffect, useState } from "react";
 
 export function WalletButton() {
-  const { connected, publicKey } = useWallet();
   const [mounted, setMounted] = useState(false);
 
   // Prevent hydration mismatch

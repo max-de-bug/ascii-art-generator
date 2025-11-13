@@ -39,3 +39,15 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# solana / anchor
+target/
+**/target/
+*.so
+test-ledger/
+.anchor/
+keypairs/
+*.key
+!tsconfig.json
+!package.json
+!package-lock.json
