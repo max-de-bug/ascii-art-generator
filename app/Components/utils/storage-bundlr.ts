@@ -13,10 +13,15 @@
  * - Pay with SOL (no need to buy AR tokens)
  * - Permanent storage (Arweave)
  * - Easy integration with Solana wallets
+ * 
+ * NOTE: This module is client-only to avoid Node.js module imports in browser
  */
 
-import Bundlr from "@bundlr-network/client";
-import { Connection, Keypair } from "@solana/web3.js";
+"use client";
+
+// Use dynamic import to avoid bundling Node.js dependencies at build time
+// This ensures Turbopack doesn't try to analyze avsc, arbundles, etc. during build
+import { Keypair } from "@solana/web3.js";
 
 // Bundlr network endpoints
 const BUNDLR_NETWORKS = {
@@ -25,12 +30,15 @@ const BUNDLR_NETWORKS = {
 } as const;
 
 /**
- * Initialize Bundlr client
+ * Initialize Bundlr client (with dynamic import)
  */
-function getBundlrClient(
+async function getBundlrClient(
   network: "mainnet" | "devnet" = "mainnet",
   privateKey?: string
-): Bundlr {
+) {
+  // Dynamic import - only loads when function is called, not at module load time
+  // Turbopack's resolveAlias config handles Node.js module exclusions
+  const Bundlr = (await import("@bundlr-network/client")).default;
   const endpoint = BUNDLR_NETWORKS[network];
 
   if (!privateKey) {
@@ -58,15 +66,20 @@ export async function uploadImageToBundlr(
   network?: "mainnet" | "devnet",
   privateKey?: string
 ): Promise<string> {
+  // Runtime check - ensure this only runs in the browser
+  if (typeof window === "undefined") {
+    throw new Error("uploadImageToBundlr can only be called in the browser");
+  }
+  
   try {
     const key = privateKey || process.env.BUNDLR_PRIVATE_KEY;
-    // Use network from parameter, env var, or default to mainnet
-    // NEXT_PUBLIC_* vars are available on both server and client
-    const bundlrNetwork =
-      network ||
-      (process.env.NEXT_PUBLIC_BUNDLR_NETWORK as "mainnet" | "devnet") ||
+    
+    // Use network from parameter, or fall back to env file, or default to mainnet
+    const bundlrNetwork: "mainnet" | "devnet" = 
+      network || 
+      (process.env.NEXT_PUBLIC_BUNDLR_NETWORK as "mainnet" | "devnet") || 
       "mainnet";
-    const bundlr = getBundlrClient(bundlrNetwork, key);
+    const bundlr = await getBundlrClient(bundlrNetwork, key);
 
     // Convert blob to buffer
     const arrayBuffer = await imageBlob.arrayBuffer();
@@ -115,12 +128,13 @@ export async function uploadMetadataToBundlr(
 ): Promise<string> {
   try {
     const key = privateKey || process.env.BUNDLR_PRIVATE_KEY;
-    // Use network from parameter, env var, or default to mainnet
-    const bundlrNetwork =
-      network ||
-      (process.env.NEXT_PUBLIC_BUNDLR_NETWORK as "mainnet" | "devnet") ||
+    
+    // Use network from parameter, or fall back to env file, or default to mainnet
+    const bundlrNetwork: "mainnet" | "devnet" = 
+      network || 
+      (process.env.NEXT_PUBLIC_BUNDLR_NETWORK as "mainnet" | "devnet") || 
       "mainnet";
-    const bundlr = getBundlrClient(bundlrNetwork, key);
+    const bundlr = await getBundlrClient(bundlrNetwork, key);
 
     const metadataBuffer = Buffer.from(JSON.stringify(metadata));
 

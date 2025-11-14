@@ -3,14 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "npm run build:wasm && next build",
+    "dev": "next dev --turbopack",
+    "build": "npm run build:wasm && next build --turbopack",
     "build:wasm": "cd wasm-ascii && wasm-pack build --target web --out-dir pkg",
     "build:wasm:dev": "cd wasm-ascii && wasm-pack build --target web --out-dir pkg --dev",
     "start": "next start",
-    "lint": "eslint",
-    "dev:webpack": "next dev --webpack",
-    "build:webpack": "npm run build:wasm && next build --webpack"
+    "lint": "eslint"
   },
   "dependencies": {
     "@bundlr-network/client": "^0.9.11",

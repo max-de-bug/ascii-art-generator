@@ -9,6 +9,7 @@ use mpl_token_metadata::{
     instructions::CreateMetadataAccountV3CpiBuilder,
     types::DataV2,
 };
+use ascii::events::{MintEvent, BuybackEvent};
 
 declare_id!("56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt");
 
@@ -30,23 +31,7 @@ pub const WSOL_MINT: &str = "So11111111111111111111111111111111111111112";
 
 /// Event emitted when an ASCII NFT is minted
 /// This makes it easy for indexers to track mints
-#[event]
-pub struct MintEvent {
-    pub minter: Pubkey,
-    pub mint: Pubkey,
-    pub name: String,
-    pub symbol: String,
-    pub uri: String,
-    pub timestamp: i64,
-}
 
-/// Event emitted when buyback occurs
-#[event]
-pub struct BuybackEvent {
-    pub amount_sol: u64,
-    pub token_amount: u64,
-    pub timestamp: i64,
-}
 
 #[program]
 pub mod ascii {
