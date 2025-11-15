@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "./Components/Providers/theme-provider";
+import { NetworkProvider } from "./Components/Providers/network-provider";
 import { WalletContextProvider } from "./Components/Providers/wallet-provider";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -37,7 +38,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <WalletContextProvider>{children}</WalletContextProvider>
+          <NetworkProvider>
+            <WalletContextProvider>{children}</WalletContextProvider>
+          </NetworkProvider>
         </ThemeProvider>
         <Toaster />
       </body>

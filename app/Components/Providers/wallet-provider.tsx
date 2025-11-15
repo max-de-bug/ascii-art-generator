@@ -14,6 +14,7 @@ import {
   LedgerWalletAdapter,
 } from "@solana/wallet-adapter-wallets";
 import { clusterApiUrl } from "@solana/web3.js";
+import { useNetwork } from "./network-provider";
 
 // Import wallet adapter CSS
 import "@solana/wallet-adapter-react-ui/styles.css";
@@ -25,24 +26,39 @@ interface WalletContextProviderProps {
 export function WalletContextProvider({
   children,
 }: WalletContextProviderProps) {
-  // You can also provide a custom RPC endpoint
-  const network = WalletAdapterNetwork.Mainnet;
+  // Get network from NetworkProvider
+  const { network } = useNetwork();
   const endpoint = useMemo(() => clusterApiUrl(network), [network]);
 
-  // Configure wallets
-  const wallets = useMemo(
-    () => [
+  // Configure wallets - ensure no duplicates
+  const wallets = useMemo(() => {
+    const walletAdapters = [
       new PhantomWalletAdapter(),
       new SolflareWalletAdapter(),
       new TorusWalletAdapter(),
       new LedgerWalletAdapter(),
-    ],
-    []
-  );
+    ];
+    
+    // Deduplicate wallets by name to prevent React key conflicts
+    const uniqueWallets = walletAdapters.filter(
+      (wallet, index, self) =>
+        index === self.findIndex((w) => w.name === wallet.name)
+    );
+    
+    return uniqueWallets;
+  }, []);
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
+    <ConnectionProvider 
+      endpoint={endpoint} 
+      config={{ commitment: "confirmed" }}
+      key={network}
+    >
+      <WalletProvider 
+        wallets={wallets} 
+        autoConnect
+        key={network} // Ensure WalletProvider remounts with network change
+      >
         <WalletModalProvider>{children}</WalletModalProvider>
       </WalletProvider>
     </ConnectionProvider>

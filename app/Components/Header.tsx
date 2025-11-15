@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ModeToggle } from "./mode-toggle";
 import { WalletButton } from "./WalletButton";
 import { Navbar } from "./Navbar";
+import { ToggleNetworkButton } from "./ToggleNetworkButton";
 
 export function Header() {
   return (
@@ -22,6 +23,7 @@ export function Header() {
             <Navbar />
           </div>
           <div className="flex items-center gap-3">
+            <ToggleNetworkButton />
             <WalletButton />
             <ModeToggle />
           </div>

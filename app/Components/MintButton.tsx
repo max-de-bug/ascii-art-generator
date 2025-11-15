@@ -7,13 +7,15 @@ import { useMemo, useState } from "react";
 import { useAsciiStore } from "./store/ascii-store";
 import { toast } from "sonner";
 import { mintAsciiArtNFTAnchor } from "./utils/mint-nft-anchor";
-import { PublicKey } from "@solana/web3.js";
+import { useNetwork } from "./Providers/network-provider";
+import { getProgramId, getSolscanUrl } from "./utils/network-config";
 
 export const MintButton = () => {
   const { asciiOutput, zoom } = useAsciiStore();
   const [isMinting, setIsMinting] = useState(false);
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
+  const { network } = useNetwork();
 
   const handleMint = async () => {
     if (!asciiOutput) {
@@ -41,12 +43,8 @@ export const MintButton = () => {
 
       toast.loading("Uploading to IPFS...", { id: "mint" });
 
-      // Get program ID from environment or use default
-      // You should set this in your .env.local: NEXT_PUBLIC_ANCHOR_PROGRAM_ID
-      const programId = new PublicKey(
-        process.env.NEXT_PUBLIC_ANCHOR_PROGRAM_ID ||
-          "56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt"
-      );
+      // Get network-specific program ID
+      const programId = getProgramId(network);
 
       toast.loading("Minting NFT via Anchor program...", { id: "mint" });
 
@@ -71,8 +69,9 @@ export const MintButton = () => {
           | undefined,
       });
 
+      const solscanUrl = getSolscanUrl(signature, network);
       toast.success(
-        `ASCII art minted successfully! View on Solscan: https://solscan.io/tx/${signature}`,
+        `ASCII art minted successfully! View on Solscan: ${solscanUrl}`,
         { id: "mint", duration: 10000 }
       );
 
