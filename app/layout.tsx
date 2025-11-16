@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "./Components/Providers/theme-provider";
 import { NetworkProvider } from "./Components/Providers/network-provider";
 import { WalletContextProvider } from "./Components/Providers/wallet-provider";
+import { QueryProvider } from "./Components/Providers/query-provider";
 
 import { Toaster } from "@/components/ui/sonner";
 
@@ -38,9 +39,11 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <NetworkProvider>
-            <WalletContextProvider>{children}</WalletContextProvider>
-          </NetworkProvider>
+          <QueryProvider>
+            <NetworkProvider>
+              <WalletContextProvider>{children}</WalletContextProvider>
+            </NetworkProvider>
+          </QueryProvider>
         </ThemeProvider>
         <Toaster />
       </body>

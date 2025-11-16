@@ -19,6 +19,19 @@ import { useNetwork } from "./network-provider";
 // Import wallet adapter CSS
 import "@solana/wallet-adapter-react-ui/styles.css";
 
+// Suppress MetaMask errors (Solflare wallet includes optional MetaMask SDK)
+if (typeof window !== 'undefined') {
+  const originalError = console.error;
+  console.error = (...args: any[]) => {
+    const message = args[0]?.toString() || '';
+    // Suppress MetaMask connection errors (non-critical for Solana wallets)
+    if (message.includes('MetaMask') || message.includes('Failed to connect to MetaMask')) {
+      return; // Silently ignore MetaMask errors
+    }
+    originalError.apply(console, args);
+  };
+}
+
 interface WalletContextProviderProps {
   children: ReactNode;
 }
