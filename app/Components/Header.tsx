@@ -16,8 +16,8 @@ export function Header() {
               </span>
             </div>
             <h1 className="m-0">
-              <Link href="/" className="text-2xl font-bold">
-                ASCII Art Generator
+              <Link href="/" className="text-2xl font-bold" style={{ fontFamily: "Retro-computer, 'Courier New', monospace", fontWeight: 700, fontSize: "1.25rem" }}>
+                O.ASCII Art Generator
               </Link>
             </h1>
             <Navbar />

@@ -7,7 +7,8 @@ export const Navbar = () => {
         <li>
           <Link
             href="/profile"
-            className="text-lg font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            className="text-lg font-bold text-muted-foreground hover:text-foreground transition-colors"
+            style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
           >
             Profile
           </Link>
@@ -15,7 +16,8 @@ export const Navbar = () => {
         <li>
           <Link
             href="/marketplace"
-            className="text-lg font-semibold text-muted-foreground/50 cursor-not-allowed pointer-events-none"
+            className="text-lg font-bold text-muted-foreground/50 cursor-not-allowed pointer-events-none"
+            style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
             aria-disabled="true"
             tabIndex={-1}
           >

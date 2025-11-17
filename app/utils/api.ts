@@ -5,6 +5,7 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export interface NFT {
+  id: string; // UUID from database
   mint: string;
   minter: string;
   name: string;

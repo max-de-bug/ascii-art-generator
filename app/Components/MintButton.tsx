@@ -49,8 +49,8 @@ export const MintButton = () => {
       toast.loading("Minting NFT via Anchor program...", { id: "mint" });
 
       // Mint NFT using Anchor program
-      // Note: bundlrPrivateKey should be passed if you have it set up
-      // Otherwise, you'll need to set BUNDLR_PRIVATE_KEY in .env.local (server-side)
+      // NFT.Storage API key is read from NEXT_PUBLIC_NFT_STORAGE_KEY env var
+      // You can also pass it explicitly via nftStorageKey parameter
       const { mint, signature } = await mintAsciiArtNFTAnchor({
         connection,
         wallet: publicKey,
@@ -62,11 +62,7 @@ export const MintButton = () => {
         programId,
         name: "ASCII Art",
         description: "Generated ASCII art NFT",
-        // bundlrPrivateKey: process.env.NEXT_PUBLIC_BUNDLR_PRIVATE_KEY, // Optional: if you want to expose it (not recommended)
-        bundlrNetwork: process.env.NEXT_PUBLIC_BUNDLR_NETWORK as
-          | "mainnet"
-          | "devnet"
-          | undefined,
+        // nftStorageKey is optional - defaults to NEXT_PUBLIC_NFT_STORAGE_KEY from env
       });
 
       const solscanUrl = getSolscanUrl(signature, network);

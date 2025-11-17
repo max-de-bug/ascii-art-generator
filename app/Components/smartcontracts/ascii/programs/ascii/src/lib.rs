@@ -5,6 +5,8 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token::{mint_to, initialize_mint, Mint, MintTo, Token, TokenAccount, InitializeMint, sync_native, SyncNative},
 };
+use ascii::errors::AsciiError;
+
 use mpl_token_metadata::{
     instructions::CreateMetadataAccountV3CpiBuilder,
     types::DataV2,
@@ -13,8 +15,11 @@ use ascii::events::{MintEvent, BuybackEvent};
 
 declare_id!("56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt");
 
-// Buyback token address
-pub const BUYBACK_TOKEN_MINT: &str = "AKzAhPPLMH5NG35kGbgkwtrTLeGyVrfCtApjnvqAATcm";
+// Buyback token address - using const function for compile-time validation
+pub const BUYBACK_TOKEN_MINT_STR: &str = "AKzAhPPLMH5NG35kGbgkwtrTLeGyVrfCtApjnvqAATcm";
+pub fn buyback_token_mint() -> Pubkey {
+    Pubkey::from_str(BUYBACK_TOKEN_MINT_STR).unwrap()
+}
 
 // Minting fee: 0.01 SOL = 10,000,000 lamports
 pub const MINT_FEE_LAMPORTS: u64 = 10_000_000;
@@ -22,12 +27,24 @@ pub const MINT_FEE_LAMPORTS: u64 = 10_000_000;
 // Jupiter Swap Program ID (V6)
 // Mainnet: JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4
 // Devnet: JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 (same)
-pub fn jupiter_swap_program_id() -> Pubkey {
-    Pubkey::from_str("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4").unwrap()
+pub const JUPITER_PROGRAM_ID_STR: &str = "JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4";
+pub fn jupiter_program_id() -> Pubkey {
+    Pubkey::from_str(JUPITER_PROGRAM_ID_STR).unwrap()
 }
 
 // WSOL mint address (Wrapped SOL)
-pub const WSOL_MINT: &str = "So11111111111111111111111111111111111111112";
+pub const WSOL_MINT_STR: &str = "So11111111111111111111111111111111111111112";
+pub fn wsol_mint() -> Pubkey {
+    Pubkey::from_str(WSOL_MINT_STR).unwrap()
+}
+
+// Authority address for executing buyback
+// TODO: Replace with your actual authority wallet address before mainnet deployment
+// For devnet/testing, you can use your wallet address
+pub const AUTHORITY_PUBKEY_STR: &str = "BmFh59mGi1Tc579jg4j1upZQtBj7r84szMzqcexjX3Zm"; // Placeholder - MUST be changed!
+pub fn authority_pubkey() -> Pubkey {
+    Pubkey::from_str(AUTHORITY_PUBKEY_STR).unwrap()
+}
 
 /// Event emitted when an ASCII NFT is minted
 /// This makes it easy for indexers to track mints
@@ -52,9 +69,11 @@ pub mod ascii {
         ctx: Context<ExecuteBuyback>,
         amount: u64, // Amount of SOL to swap (in lamports)
         swap_instruction_data: Vec<u8>, // Pre-computed Jupiter swap instruction data
+        minimum_output_amount: u64, // Minimum tokens expected from swap (slippage protection)
     ) -> Result<()> {
         require!(amount > 0, AsciiError::InvalidAmount);
         require!(!swap_instruction_data.is_empty(), AsciiError::InvalidSwapData);
+        require!(minimum_output_amount > 0, AsciiError::InvalidAmount);
 
         let fee_vault = &ctx.accounts.fee_vault;
         let fee_vault_balance = fee_vault.get_lamports();
@@ -116,6 +135,29 @@ pub mod ascii {
                 }
             }).collect();
         
+        // Validate Jupiter program ID
+        require!(
+            ctx.accounts.jupiter_program.key() == jupiter_program_id(),
+            AsciiError::InvalidSwapData
+        );
+
+        // Note: WSOL and buyback token account mints are already validated
+        // in the account constraints above, so no need to re-validate here.
+
+        // WSOL Account Usage Verification
+        // Verify that the swap instruction uses the WSOL account we funded
+        // This ensures the swap actually uses our WSOL, not a different account
+        let wsol_account_key = ctx.accounts.wsol_account.key();
+        let swap_uses_our_wsol = ctx.remaining_accounts.iter().any(|acc| acc.key == wsol_account_key);
+        require!(
+            swap_uses_our_wsol,
+            AsciiError::InvalidWSOLAccountInSwap
+        );
+
+        // Capture initial balance to verify tokens were received after swap
+        let initial_token_balance = ctx.accounts.buyback_token_account.amount;
+
+
         // Build the swap instruction
         let swap_ix = anchor_lang::solana_program::instruction::Instruction {
             program_id: ctx.accounts.jupiter_program.key(),
@@ -130,9 +172,20 @@ pub mod ascii {
             ctx.remaining_accounts,
         )?;
 
-        // Get the amount of tokens received (approximate, actual amount from swap)
-        let token_account = &ctx.accounts.buyback_token_account;
-        let token_amount = token_account.amount;
+        // Verify tokens were actually received from the swap
+        let final_token_balance = ctx.accounts.buyback_token_account.amount;
+        require!(
+            final_token_balance > initial_token_balance,
+            AsciiError::InvalidSwapData
+        );
+
+        let token_amount = final_token_balance - initial_token_balance;
+
+        // Slippage Protection: Verify output meets minimum expected amount
+        require!(
+            token_amount >= minimum_output_amount,
+            AsciiError::SlippageExceeded
+        );
 
         msg!("Buyback executed: {} SOL swapped for {} tokens", amount, token_amount);
 
@@ -164,6 +217,24 @@ pub mod ascii {
         require!(
             ascii_length > 0 && ascii_length <= 50000,
             AsciiError::InvalidLength
+        );
+
+        // Validate name length (Metaplex standard: max 32 chars)
+        require!(
+            name.len() > 0 && name.len() <= 32,
+            AsciiError::InvalidName
+        );
+
+        // Validate symbol length (Metaplex standard: max 10 chars)
+        require!(
+            symbol.len() > 0 && symbol.len() <= 10,
+            AsciiError::InvalidSymbol
+        );
+
+        // Validate URI length (reasonable limit: 200 chars)
+        require!(
+            uri.len() > 0 && uri.len() <= 200,
+            AsciiError::InvalidUri
         );
 
         // Collect minting fee
@@ -273,9 +344,9 @@ pub mod ascii {
         emit!(MintEvent {
             minter: ctx.accounts.payer.key(),
             mint: ctx.accounts.mint.key(),
-            name: name.clone(),
-            symbol: symbol.clone(),
-            uri: uri.clone(),
+            name,
+            symbol,
+            uri,
             timestamp: Clock::get()?.unix_timestamp,
         });
 
@@ -290,6 +361,10 @@ pub struct Initialize {}
 #[derive(Accounts)]
 pub struct ExecuteBuyback<'info> {
     /// Authority that can execute buyback
+    /// Only the authorized address can execute buyback operations
+    #[account(
+        constraint = authority.key() == Pubkey::from_str(AUTHORITY_PUBKEY_STR).unwrap() @ AsciiError::Unauthorized
+    )]
     pub authority: Signer<'info>,
 
     /// Fee vault PDA - holds collected fees
@@ -302,22 +377,32 @@ pub struct ExecuteBuyback<'info> {
 
     /// WSOL account (wrapped SOL) - receives SOL and wraps it
     /// This account will hold WSOL before swap
-    #[account(mut)]
+    /// Validated to ensure it's actually a WSOL account
+    #[account(
+        mut,
+        constraint = wsol_account.mint == Pubkey::from_str(WSOL_MINT_STR).unwrap() @ AsciiError::InvalidWSOLAccount
+    )]
     pub wsol_account: Account<'info, TokenAccount>,
 
     /// Buyback token account - receives tokens after swap
-    #[account(mut)]
+    /// Validated to ensure it's for the correct buyback token
+    #[account(
+        mut,
+        constraint = buyback_token_account.mint == Pubkey::from_str(BUYBACK_TOKEN_MINT_STR).unwrap() @ AsciiError::InvalidTokenMint
+    )]
     pub buyback_token_account: Account<'info, TokenAccount>,
 
     /// Jupiter swap program
-    /// CHECK: Jupiter swap program
-    #[account(address = jupiter_swap_program_id())]
+    /// CHECK: Jupiter swap program - validated to ensure correct program
+    #[account(address = jupiter_program_id())]
     pub jupiter_program: UncheckedAccount<'info>,
 
-    /// Token program
+    /// Token program - validated to ensure correct program
+    #[account(address = Token::id())]
     pub token_program: Program<'info, Token>,
 
-    /// System program
+    /// System program - validated to ensure correct program
+    #[account(address = anchor_lang::system_program::ID)]
     pub system_program: Program<'info, System>,
 
     /// Rent sysvar
@@ -393,14 +478,3 @@ pub struct MintAsciiNft<'info> {
     pub fee_vault: SystemAccount<'info>,
 }
 
-#[error_code]
-pub enum AsciiError {
-    #[msg("ASCII art length must be between 1 and 50000 characters")]
-    InvalidLength,
-    #[msg("Insufficient funds")]
-    InsufficientFunds,
-    #[msg("Invalid amount")]
-    InvalidAmount,
-    #[msg("Invalid swap instruction data")]
-    InvalidSwapData,
-}

@@ -5,7 +5,7 @@
 
 import { ASCII_CHARS } from "../store/ascii-store";
 
-// Module declaration for WASM (allows TypeScript to understand the module structure)
+// Type declarations for WASM module are in wasm-ascii.d.ts at project root
 // This module will exist after running 'npm run build:wasm'
 declare module "../../../wasm-ascii/pkg/wasm_ascii" {
   export function convert_to_ascii(
@@ -59,6 +59,9 @@ export const initWasm = async (): Promise<void> => {
   if (!wasmInitialized && typeof window !== "undefined") {
     try {
       // Dynamic import for WASM (works with Next.js)
+      // Module may not exist until 'npm run build:wasm' is run - handled by try/catch
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - TypeScript can't resolve this module until it's built (expected)
       const wasm = (await import(
         "../../../wasm-ascii/pkg/wasm_ascii"
       )) as WasmModule;
@@ -254,32 +257,46 @@ export const generateAsciiFromImageWasm = async (
     await initWasm();
   }
 
-  const img = document.createElement("img");
-  img.crossOrigin = "anonymous";
-  img.onload = async () => {
-    const width = Math.floor(options.asciiWidth[0]);
-    const { createCanvasFromImage } = await import("./ascii-converter");
-    const canvas = createCanvasFromImage(img, width, options.blur);
+  // Return a Promise that resolves when the image loads and conversion completes
+  return new Promise((resolve, reject) => {
+    const img = document.createElement("img");
+    img.crossOrigin = "anonymous";
+    
+    img.onload = async () => {
+      try {
+        const width = Math.floor(options.asciiWidth[0]);
+        const { createCanvasFromImage } = await import("./ascii-converter");
+        const canvas = createCanvasFromImage(img, width, options.blur);
 
-    const ascii = convertCanvasToAsciiWasmSync({
-      canvas,
-      width,
-      invert: options.invert,
-      charset: options.charset,
-      manualChar: options.manualChar,
-      ignoreWhite: options.ignoreWhite,
-      dithering: options.dithering,
-      ditherAlgorithm: options.ditherAlgorithm,
-      edgeMethod: options.edgeMethod,
-      edgeThreshold: options.edgeThreshold,
-      dogThreshold: options.dogThreshold,
-      brightness: options.brightness,
-      contrast: options.contrast,
-    });
+        const ascii = convertCanvasToAsciiWasmSync({
+          canvas,
+          width,
+          invert: options.invert,
+          charset: options.charset,
+          manualChar: options.manualChar,
+          ignoreWhite: options.ignoreWhite,
+          dithering: options.dithering,
+          ditherAlgorithm: options.ditherAlgorithm,
+          edgeMethod: options.edgeMethod,
+          edgeThreshold: options.edgeThreshold,
+          dogThreshold: options.dogThreshold,
+          brightness: options.brightness,
+          contrast: options.contrast,
+        });
 
-    options.setAsciiOutput(ascii);
-  };
-  img.src = imageDataUrl;
+        options.setAsciiOutput(ascii);
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    img.onerror = () => {
+      reject(new Error("Failed to load image"));
+    };
+    
+    img.src = imageDataUrl;
+  });
 };
 
 export const generateAsciiFromTextWasm = async (

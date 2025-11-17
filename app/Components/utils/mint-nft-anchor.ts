@@ -12,9 +12,9 @@ import {
   getAssociatedTokenAddress,
 } from "@solana/spl-token";
 import { Program, AnchorProvider, Wallet, BN, Idl } from "@coral-xyz/anchor";
-// Import Bundlr storage functions (Arweave via SOL payment)
+// Import NFT.Storage functions (IPFS via free API)
 // Use dynamic import to ensure client-only loading
-const loadBundlr = () => import("./storage-bundlr");
+const loadNFTStorage = () => import("./storage-nft");
 
 // IDL will be generated after building the Anchor program
 // For now, we'll define it inline or load it dynamically
@@ -85,8 +85,7 @@ interface MintNFTParams {
   programId: PublicKey;
   name?: string;
   description?: string;
-  bundlrPrivateKey?: string; // Optional: Bundlr private key for uploads
-  bundlrNetwork?: "mainnet" | "devnet"; // Optional: Bundlr network
+  nftStorageKey?: string; // Optional: NFT.Storage API key (or use env var)
 }
 
 /**
@@ -114,25 +113,12 @@ function deriveMintAuthorityPDA(programId: PublicKey): [PublicKey, number] {
 }
 
 /**
- * Derive the mint state PDA
+ * Derive the fee vault PDA
+ * PDA seeds: ["fee_vault"]
  */
-function deriveMintStatePDA(programId: PublicKey): [PublicKey, number] {
+function deriveFeeVaultPDA(programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("mint_state")],
-    programId
-  );
-}
-
-/**
- * Derive the user state PDA for a specific user
- * PDA seeds: ["user_state", user_public_key]
- */
-function deriveUserStatePDA(
-  programId: PublicKey,
-  user: PublicKey
-): [PublicKey, number] {
-  return PublicKey.findProgramAddressSync(
-    [Buffer.from("user_state"), user.toBuffer()],
+    [Buffer.from("fee_vault")],
     programId
   );
 }
@@ -149,23 +135,20 @@ export async function mintAsciiArtNFTAnchor({
   programId,
   name = "ASCII Art",
   description = "Generated ASCII art",
-  bundlrPrivateKey,
-  bundlrNetwork,
+  nftStorageKey,
 }: MintNFTParams): Promise<{
   mint: PublicKey;
   signature: string;
 }> {
-  // 1. Upload image to Arweave via Bundlr (permanent storage, pay with SOL)
-  // Bundlr makes it easy to upload to Arweave using SOL instead of AR tokens
+  // 1. Upload image and metadata to IPFS via NFT.Storage (free storage)
+  // NFT.Storage provides free IPFS storage up to 31GB
   // Use dynamic import to ensure client-only loading (avoids Node.js module issues)
-  const { uploadImageToBundlr, uploadMetadataToBundlr } = await loadBundlr();
-  const imageUri = await uploadImageToBundlr(
-    imageBlob,
-    bundlrNetwork,
-    bundlrPrivateKey
-  );
+  const { uploadImageToNFTStorage, uploadMetadataToNFTStorage } = await loadNFTStorage();
+  
+  // Upload image first to get IPFS URL
+  const imageUri = await uploadImageToNFTStorage(imageBlob, nftStorageKey);
 
-  // 2. Create metadata
+  // Create metadata with image IPFS URL
   const metadata = {
     name: name,
     description: `${description}\n\nASCII Art:\n${asciiArt}`,
@@ -182,12 +165,8 @@ export async function mintAsciiArtNFTAnchor({
     ],
   };
 
-  // 3. Upload metadata to Arweave via Bundlr (permanent storage, pay with SOL)
-  const metadataUri = await uploadMetadataToBundlr(
-    metadata,
-    bundlrNetwork,
-    bundlrPrivateKey
-  );
+  // Upload metadata to IPFS
+  const metadataUri = await uploadMetadataToNFTStorage(metadata, nftStorageKey);
 
   // 4. Create Anchor-compatible wallet adapter
   // ✅ BEST PRACTICE: Use reusable utility function (see createAnchorWallet above)
@@ -234,8 +213,7 @@ export async function mintAsciiArtNFTAnchor({
 
   // 8. Derive PDAs
   const [mintAuthority] = deriveMintAuthorityPDA(program.programId);
-  const [mintState] = deriveMintStatePDA(program.programId);
-  const [userState] = deriveUserStatePDA(program.programId, wallet);
+  const [feeVault] = deriveFeeVaultPDA(program.programId);
 
   // 9. Generate a new mint keypair (we'll use a random keypair for uniqueness)
   const { Keypair } = await import("@solana/web3.js");
@@ -261,8 +239,7 @@ export async function mintAsciiArtNFTAnchor({
       mint: mint,
       tokenAccount: associatedTokenAccount,
       metadata: metadataPDA,
-      mintState: mintState,
-      userState: userState,
+      feeVault: feeVault,
       tokenProgram: TOKEN_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
     })

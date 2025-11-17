@@ -48,7 +48,7 @@ export const ToggleNetworkButton = () => {
     network === WalletAdapterNetwork.Mainnet ? "Mainnet" : "Devnet";
 
   return (
-    <Button variant="outline" onClick={handleToggle}>
+    <Button variant="outline" onClick={handleToggle} disabled>
       <NetworkIcon className="mr-2 h-4 w-4" />
       <span>{networkLabel}</span>
     </Button>
