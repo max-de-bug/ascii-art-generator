@@ -39,9 +39,8 @@ pub fn wsol_mint() -> Pubkey {
 }
 
 // Authority address for executing buyback
-// TODO: Replace with your actual authority wallet address before mainnet deployment
-// For devnet/testing, you can use your wallet address
-pub const AUTHORITY_PUBKEY_STR: &str = "BmFh59mGi1Tc579jg4j1upZQtBj7r84szMzqcexjX3Zm"; // Placeholder - MUST be changed!
+// This is the public key of the authority wallet that can execute buybacks
+pub const AUTHORITY_PUBKEY_STR: &str = "95VKqkiYBhyjHGoEx63MqhdUGkTK5wvF7yP1Kv8rnoWe";
 pub fn authority_pubkey() -> Pubkey {
     Pubkey::from_str(AUTHORITY_PUBKEY_STR).unwrap()
 }
