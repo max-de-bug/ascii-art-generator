@@ -1,3 +1,5 @@
+use anchor_lang::prelude::*;
+
 #[error_code]
 pub enum AsciiError {
     #[msg("ASCII art length must be between 1 and 50000 characters")]

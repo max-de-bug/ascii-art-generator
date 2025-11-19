@@ -43,6 +43,10 @@ export const createImageBlob = (
   const baseFontSize = (zoom[0] / 100) * 12;
   const lineHeightMultiplier = 1.1;
 
+  // Get device pixel ratio for high-DPI displays (default to 2 for high quality)
+  const devicePixelRatio = window.devicePixelRatio || 2;
+  const scaleFactor = Math.max(devicePixelRatio, 2); // Minimum 2x for quality
+
   // Calculate canvas dimensions
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { alpha: false });
@@ -68,13 +72,20 @@ export const createImageBlob = (
   const targetWidth = maxWidth + padding * 2;
   const targetHeight = baseHeight + padding * 2;
 
-  // Set canvas dimensions
-  canvas.width = targetWidth;
-  canvas.height = targetHeight;
+  // Set canvas internal size (scaled for high-DPI)
+  canvas.width = targetWidth * scaleFactor;
+  canvas.height = targetHeight * scaleFactor;
+
+  // Set canvas display size (CSS pixels)
+  canvas.style.width = `${targetWidth}px`;
+  canvas.style.height = `${targetHeight}px`;
+
+  // Scale the context to match device pixel ratio
+  ctx.scale(scaleFactor, scaleFactor);
 
   // Re-apply context settings after canvas resize (resetting canvas clears context)
   ctx.fillStyle = backgroundColor;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
 
   // Draw text (left-aligned with padding) - ensure contrast with background
   ctx.fillStyle =
@@ -89,6 +100,29 @@ export const createImageBlob = (
     const y = padding + index * lineHeight;
     ctx.fillText(line, x, y);
   });
+
+  // Add watermark in bottom-right corner
+  const watermarkText = "powered by O.XYZ";
+  const watermarkFontSize = Math.max(baseFontSize * 0.4, 8); // 40% of base font, minimum 8px
+  ctx.font = `400 ${watermarkFontSize}px "Geist Mono", monospace`;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "bottom";
+  
+  // Use semi-transparent text with good contrast
+  const watermarkOpacity = 0.6;
+  const isDarkBackground = backgroundColor.toLowerCase() === "#000000";
+  ctx.fillStyle = isDarkBackground
+    ? `rgba(255, 255, 255, ${watermarkOpacity})`
+    : `rgba(0, 0, 0, ${watermarkOpacity})`;
+  
+  // Position in bottom-right with padding
+  const watermarkPadding = 12;
+  const watermarkX = targetWidth - watermarkPadding;
+  const watermarkY = targetHeight - watermarkPadding;
+  
+  ctx.fillText(watermarkText, watermarkX, watermarkY);
+
+
 
   // Convert to PNG blob - Promise is only needed here because toBlob uses a callback
   return new Promise((resolve) => {

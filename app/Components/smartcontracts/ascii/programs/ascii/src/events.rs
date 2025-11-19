@@ -1,3 +1,5 @@
+use anchor_lang::prelude::*;
+
 #[event]
 pub struct MintEvent {
     pub minter: Pubkey,

@@ -1,17 +1,29 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::sysvar::SysvarId;
+use anchor_lang::solana_program::{
+    instruction::{AccountMeta, Instruction},
+    program::{invoke, invoke_signed},
+    system_instruction,
+    sysvar::{rent::Rent, SysvarId},
+};
+use anchor_lang::system_program;
 use std::str::FromStr;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token::{mint_to, initialize_mint, Mint, MintTo, Token, TokenAccount, InitializeMint, sync_native, SyncNative},
 };
-use ascii::errors::AsciiError;
 
 use mpl_token_metadata::{
     instructions::CreateMetadataAccountV3CpiBuilder,
     types::DataV2,
 };
-use ascii::events::{MintEvent, BuybackEvent};
+
+// Declare modules
+pub mod errors;
+pub mod events;
+
+// Import from modules
+use errors::AsciiError;
+use events::{MintEvent, BuybackEvent};
 
 declare_id!("56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt");
 
@@ -92,8 +104,8 @@ pub mod ascii {
 
         // Step 1: Transfer SOL from fee vault to WSOL account
         // This will wrap SOL to WSOL automatically when we create the WSOL account
-        anchor_lang::solana_program::program::invoke_signed(
-            &anchor_lang::solana_program::system_instruction::transfer(
+        invoke_signed(
+            &system_instruction::transfer(
                 &fee_vault.key(),
                 &ctx.accounts.wsol_account.key(),
                 amount,
@@ -125,9 +137,9 @@ pub mod ascii {
         // We just need to pass the accounts in the correct order
         
         // Build account metas from remaining_accounts (client provides these)
-        let account_metas: Vec<anchor_lang::solana_program::instruction::AccountMeta> = 
+        let account_metas: Vec<AccountMeta> = 
             ctx.remaining_accounts.iter().map(|acc| {
-                anchor_lang::solana_program::instruction::AccountMeta {
+                AccountMeta {
                     pubkey: *acc.key,
                     is_signer: acc.is_signer,
                     is_writable: acc.is_writable,
@@ -147,7 +159,7 @@ pub mod ascii {
         // Verify that the swap instruction uses the WSOL account we funded
         // This ensures the swap actually uses our WSOL, not a different account
         let wsol_account_key = ctx.accounts.wsol_account.key();
-        let swap_uses_our_wsol = ctx.remaining_accounts.iter().any(|acc| acc.key == wsol_account_key);
+        let swap_uses_our_wsol = ctx.remaining_accounts.iter().any(|acc| *acc.key == wsol_account_key);
         require!(
             swap_uses_our_wsol,
             AsciiError::InvalidWSOLAccountInSwap
@@ -158,7 +170,7 @@ pub mod ascii {
 
 
         // Build the swap instruction
-        let swap_ix = anchor_lang::solana_program::instruction::Instruction {
+        let swap_ix = Instruction {
             program_id: ctx.accounts.jupiter_program.key(),
             accounts: account_metas,
             data: swap_instruction_data,
@@ -166,7 +178,7 @@ pub mod ascii {
 
         // Execute swap via CPI using remaining_accounts directly
         // The client should provide all necessary accounts including WSOL, buyback token, etc.
-        anchor_lang::solana_program::program::invoke(
+        invoke(
             &swap_ix,
             ctx.remaining_accounts,
         )?;
@@ -247,8 +259,8 @@ pub mod ascii {
         );
 
         // Transfer fee to fee vault PDA
-        anchor_lang::solana_program::program::invoke(
-            &anchor_lang::solana_program::system_instruction::transfer(
+        invoke(
+            &system_instruction::transfer(
                 &ctx.accounts.payer.key(),
                 &ctx.accounts.fee_vault.key(),
                 mint_fee,
@@ -401,12 +413,12 @@ pub struct ExecuteBuyback<'info> {
     pub token_program: Program<'info, Token>,
 
     /// System program - validated to ensure correct program
-    #[account(address = anchor_lang::system_program::ID)]
+    #[account(address = system_program::ID)]
     pub system_program: Program<'info, System>,
 
     /// Rent sysvar
     /// CHECK: Rent sysvar
-    #[account(address = anchor_lang::solana_program::sysvar::rent::Rent::id())]
+    #[account(address = Rent::id())]
     pub rent: UncheckedAccount<'info>,
 }
 
@@ -424,12 +436,12 @@ pub struct MintAsciiNft<'info> {
     pub token_metadata_program: UncheckedAccount<'info>,
 
     /// CHECK: System Program
-    #[account(address = anchor_lang::system_program::ID)]
+    #[account(address = system_program::ID)]
     pub system_program: UncheckedAccount<'info>,
 
     /// CHECK: Rent Sysvar
     /// We use UncheckedAccount to reduce stack usage
-    #[account(address = anchor_lang::solana_program::sysvar::rent::Rent::id())]
+    #[account(address = Rent::id())]
     pub rent: UncheckedAccount<'info>,
 
     /// The mint authority PDA (controls the mint)
