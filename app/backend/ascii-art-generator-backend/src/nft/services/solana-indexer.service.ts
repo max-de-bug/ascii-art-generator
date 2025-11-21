@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   Connection,
@@ -6,11 +11,12 @@ import {
   Commitment,
   ParsedTransactionWithMeta,
 } from '@solana/web3.js';
+import { Idl } from '@coral-xyz/anchor';
 import { EventParserService } from './event-parser.service';
 import { NftStorageService } from './nft-storage.service';
 import { NFT } from '../entities/nft.entity';
 import { BuybackEvent } from '../entities/buyback-event.entity';
-
+import idl from '../../../../../idl/ascii.json';
 /**
  * Solana Indexer Service
  * Listens to Solana transactions and indexes MintEvent
@@ -29,12 +35,12 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   private cleanupIntervalId: NodeJS.Timeout | null = null;
   private pollingIntervalId: NodeJS.Timeout | null = null;
   private websocketMonitorIntervalId: NodeJS.Timeout | null = null;
-  
+
   // Cache configuration (reasonable defaults)
   private readonly MAX_CACHE_SIZE = 100000; // Max 100k signatures in memory
   private readonly CACHE_RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours retention
   private readonly CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // Cleanup every hour
-  
+
   // Indexer configuration
   private readonly POLLING_INTERVAL_MS = 30000; // Poll every 30 seconds
   private readonly BACKFILL_LIMIT = 100; // Process last 100 transactions on startup
@@ -43,7 +49,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   private readonly RETRY_DELAY_MS = 1000; // Initial retry delay (exponential backoff)
   private readonly MAX_CONCURRENT_PROCESSING = 10; // Max concurrent transaction processing
   private readonly INITIALIZATION_DELAY_MS = 2000; // Delay before starting indexer
-  
+
   // Metrics
   private metrics = {
     totalProcessed: 0,
@@ -57,11 +63,15 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
     private readonly eventParser: EventParserService,
     private readonly nftStorage: NftStorageService,
   ) {
-    const network = this.configService.get<string>('solana.network', 'mainnet-beta');
-    const rpcUrl = network === 'devnet' 
-      ? this.configService.get<string>('solana.rpcUrlDevnet')
-      : this.configService.get<string>('solana.rpcUrl');
-    
+    const network = this.configService.get<string>(
+      'solana.network',
+      'mainnet-beta',
+    );
+    const rpcUrl =
+      network === 'devnet'
+        ? this.configService.get<string>('solana.rpcUrlDevnet')
+        : this.configService.get<string>('solana.rpcUrl');
+
     const commitment = this.configService.get<Commitment>(
       'solana.commitment',
       'confirmed',
@@ -79,18 +89,35 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
     this.programId = new PublicKey(programIdStr);
 
-    this.logger.log(`Initialized indexer for program: ${this.programId.toBase58()}`);
+    this.logger.log(
+      `Initialized indexer for program: ${this.programId.toBase58()}`,
+    );
     this.logger.log(`RPC URL: ${rpcUrl}`);
     this.logger.log(`Network: ${network}`);
   }
 
   async onModuleInit() {
+    // Load IDL and initialize event parser
+    await this.loadIdl();
+
     // Start indexing after a short delay to ensure everything is initialized
     setTimeout(() => {
       this.startIndexing();
     }, this.INITIALIZATION_DELAY_MS);
   }
 
+  /**
+   * Load the program IDL and initialize the event parser
+   */
+  private async loadIdl(): Promise<void> {
+    try {
+      // Type assertion
+      this.eventParser.setIdl(idl as Idl);
+      this.logger.log('Loaded IDL from import');
+    } catch (error) {
+      this.logger.error('Failed to load IDL', error);
+    }
+  }
   async onModuleDestroy() {
     await this.stopIndexing();
     this.stopCleanupInterval();
@@ -120,17 +147,19 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
         'confirmed',
       );
 
-      this.logger.log(`Subscribed to program logs. Subscription ID: ${this.subscriptionId}`);
+      this.logger.log(
+        `Subscribed to program logs. Subscription ID: ${this.subscriptionId}`,
+      );
 
       // Backfill: Process recent transactions
       await this.backfillRecentTransactions();
-      
+
       // Start polling for missed transactions
       this.startPolling();
-      
+
       // Start periodic cleanup to prevent memory leak
       this.startCleanupInterval();
-      
+
       // Setup WebSocket reconnection monitoring
       this.monitorWebSocketConnection();
     } catch (error) {
@@ -162,10 +191,10 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
     // Stop cleanup interval
     this.stopCleanupInterval();
-    
+
     // Stop polling interval
     this.stopPolling();
-    
+
     // Stop WebSocket monitoring
     this.stopWebSocketMonitoring();
   }
@@ -201,7 +230,9 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
     // Check concurrency limit
     if (this.processingSignatures.size >= this.MAX_CONCURRENT_PROCESSING) {
-      this.logger.debug(`Concurrency limit reached (${this.MAX_CONCURRENT_PROCESSING}), queuing signature ${signature}`);
+      this.logger.debug(
+        `Concurrency limit reached (${this.MAX_CONCURRENT_PROCESSING}), queuing signature ${signature}`,
+      );
       // Queue for later processing (simple implementation - in production, use a proper queue)
       setTimeout(() => this.processLogs(logs, context), 1000);
       return;
@@ -212,10 +243,11 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
     try {
       // Get the full transaction with retry logic
       const transaction = await this.retryRpcCall(
-        () => this.connection.getParsedTransaction(signature, {
-          maxSupportedTransactionVersion: 0,
-          commitment: 'confirmed',
-        }),
+        () =>
+          this.connection.getParsedTransaction(signature, {
+            maxSupportedTransactionVersion: 0,
+            commitment: 'confirmed',
+          }),
         `getParsedTransaction(${signature})`,
       );
 
@@ -231,7 +263,10 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       this.metrics.lastProcessedAt = new Date();
     } catch (error) {
       this.metrics.totalErrors++;
-      this.logger.error(`Error processing logs for signature ${signature}`, error);
+      this.logger.error(
+        `Error processing logs for signature ${signature}`,
+        error,
+      );
     } finally {
       this.processingSignatures.delete(signature);
     }
@@ -248,7 +283,10 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
     try {
       // Check if transaction was successful
       if (transaction.meta?.err) {
-        this.logger.debug(`Transaction failed: ${signature}`, transaction.meta.err);
+        this.logger.debug(
+          `Transaction failed: ${signature}`,
+          transaction.meta.err,
+        );
         return;
       }
 
@@ -300,7 +338,9 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       }
 
       // No recognized event found, skip
-      this.logger.debug(`No MintEvent or BuybackEvent found in transaction ${signature}`);
+      this.logger.debug(
+        `No MintEvent or BuybackEvent found in transaction ${signature}`,
+      );
     } catch (error) {
       this.logger.error(`Error processing transaction ${signature}`, error);
     }
@@ -313,13 +353,14 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   private async backfillRecentTransactions() {
     try {
       this.logger.log('Backfilling recent transactions...');
-      
+
       const signatures = await this.retryRpcCall(
-        () => this.connection.getSignaturesForAddress(
-          this.programId,
-          { limit: this.BACKFILL_LIMIT },
-          'confirmed',
-        ),
+        () =>
+          this.connection.getSignaturesForAddress(
+            this.programId,
+            { limit: this.BACKFILL_LIMIT },
+            'confirmed',
+          ),
         'getSignaturesForAddress(backfill)',
       );
 
@@ -333,7 +374,9 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
         }
 
         // Check database to avoid reprocessing (important after restarts)
-        const isProcessed = await this.nftStorage.isTransactionProcessed(sigInfo.signature);
+        const isProcessed = await this.nftStorage.isTransactionProcessed(
+          sigInfo.signature,
+        );
         if (isProcessed) {
           this.addProcessedSignature(sigInfo.signature); // Add to cache
           skipped++;
@@ -342,7 +385,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
         // Check concurrency limit
         if (this.processingSignatures.size >= this.MAX_CONCURRENT_PROCESSING) {
-          await new Promise(resolve => setTimeout(resolve, 500)); // Wait before continuing
+          await new Promise((resolve) => setTimeout(resolve, 500)); // Wait before continuing
           continue;
         }
 
@@ -354,31 +397,38 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
         try {
           const transaction = await this.retryRpcCall(
-            () => this.connection.getParsedTransaction(
-              sigInfo.signature,
-              {
+            () =>
+              this.connection.getParsedTransaction(sigInfo.signature, {
                 maxSupportedTransactionVersion: 0,
                 commitment: 'confirmed',
-              },
-            ),
+              }),
             `getParsedTransaction(backfill ${sigInfo.signature})`,
           );
 
           if (transaction) {
-            await this.processTransaction(transaction, sigInfo.signature, sigInfo.slot);
+            await this.processTransaction(
+              transaction,
+              sigInfo.signature,
+              sigInfo.slot,
+            );
             this.addProcessedSignature(sigInfo.signature);
             this.metrics.totalProcessed++;
             processed++;
           }
         } catch (error) {
           this.metrics.totalErrors++;
-          this.logger.warn(`Error backfilling transaction ${sigInfo.signature}`, error);
+          this.logger.warn(
+            `Error backfilling transaction ${sigInfo.signature}`,
+            error,
+          );
         } finally {
           this.processingSignatures.delete(sigInfo.signature);
         }
       }
 
-      this.logger.log(`Backfilled ${processed} transactions (skipped ${skipped} already processed)`);
+      this.logger.log(
+        `Backfilled ${processed} transactions (skipped ${skipped} already processed)`,
+      );
     } catch (error) {
       this.logger.error('Error backfilling transactions', error);
     }
@@ -403,7 +453,9 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       }
     }, this.POLLING_INTERVAL_MS);
 
-    this.logger.log(`Started polling interval (every ${this.POLLING_INTERVAL_MS / 1000} seconds)`);
+    this.logger.log(
+      `Started polling interval (every ${this.POLLING_INTERVAL_MS / 1000} seconds)`,
+    );
   }
 
   /**
@@ -423,11 +475,12 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   private async pollRecentTransactions() {
     try {
       const signatures = await this.retryRpcCall(
-        () => this.connection.getSignaturesForAddress(
-          this.programId,
-          { limit: this.POLL_LIMIT },
-          'confirmed',
-        ),
+        () =>
+          this.connection.getSignaturesForAddress(
+            this.programId,
+            { limit: this.POLL_LIMIT },
+            'confirmed',
+          ),
         'getSignaturesForAddress(poll)',
       );
 
@@ -443,7 +496,9 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
         }
 
         // Check database (safety net for missed transactions)
-        const isProcessed = await this.nftStorage.isTransactionProcessed(sigInfo.signature);
+        const isProcessed = await this.nftStorage.isTransactionProcessed(
+          sigInfo.signature,
+        );
         if (isProcessed) {
           this.addProcessedSignature(sigInfo.signature); // Add to cache
           continue;
@@ -458,24 +513,29 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
         try {
           const transaction = await this.retryRpcCall(
-            () => this.connection.getParsedTransaction(
-              sigInfo.signature,
-              {
+            () =>
+              this.connection.getParsedTransaction(sigInfo.signature, {
                 maxSupportedTransactionVersion: 0,
                 commitment: 'confirmed',
-              },
-            ),
+              }),
             `getParsedTransaction(poll ${sigInfo.signature})`,
           );
 
           if (transaction) {
-            await this.processTransaction(transaction, sigInfo.signature, sigInfo.slot);
+            await this.processTransaction(
+              transaction,
+              sigInfo.signature,
+              sigInfo.slot,
+            );
             this.addProcessedSignature(sigInfo.signature);
             this.metrics.totalProcessed++;
           }
         } catch (error) {
           this.metrics.totalErrors++;
-          this.logger.warn(`Error polling transaction ${sigInfo.signature}`, error);
+          this.logger.warn(
+            `Error polling transaction ${sigInfo.signature}`,
+            error,
+          );
         } finally {
           this.processingSignatures.delete(sigInfo.signature);
         }
@@ -492,12 +552,12 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
    */
   private addProcessedSignature(signature: string): void {
     const now = Date.now();
-    
+
     // If cache is full, evict oldest entries first
     if (this.processedSignatures.size >= this.MAX_CACHE_SIZE) {
       this.cleanupOldEntries(true); // Force cleanup to make space
     }
-    
+
     this.processedSignatures.set(signature, now);
   }
 
@@ -541,7 +601,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
     // Sort by timestamp to evict oldest first
     const entries = Array.from(this.processedSignatures.entries());
-    
+
     if (force) {
       // Force mode: evict oldest entries to make space (keep 90% of max)
       const targetSize = Math.floor(this.MAX_CACHE_SIZE * 0.9);
@@ -583,7 +643,10 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       return await fn();
     } catch (error) {
       if (retries >= this.MAX_RETRIES) {
-        this.logger.error(`Max retries (${this.MAX_RETRIES}) exceeded for ${operation}`, error);
+        this.logger.error(
+          `Max retries (${this.MAX_RETRIES}) exceeded for ${operation}`,
+          error,
+        );
         throw error;
       }
 
@@ -594,7 +657,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
         error,
       );
 
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
       return this.retryRpcCall(fn, operation, retries + 1);
     }
   }
@@ -608,42 +671,52 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Check connection health periodically
-    this.websocketMonitorIntervalId = setInterval(async () => {
-      if (!this.isIndexing) return;
+    this.websocketMonitorIntervalId = setInterval(
+      async () => {
+        if (!this.isIndexing) return;
 
-      try {
-        // Simple health check - try to get slot
-        await this.retryRpcCall(
-          () => this.connection.getSlot('confirmed'),
-          'getSlot(healthCheck)',
-        );
-      } catch (error) {
-        this.logger.error('WebSocket connection health check failed, attempting reconnection', error);
-        
-        // Attempt to restart indexing
         try {
-          if (this.subscriptionId !== null) {
-            await this.connection.removeOnLogsListener(this.subscriptionId);
-            this.subscriptionId = null;
-          }
-          
-          // Restart subscription
-          this.subscriptionId = this.connection.onLogs(
-            this.programId,
-            async (logs, context) => {
-              await this.processLogs(logs, context);
-            },
-            'confirmed',
+          // Simple health check - try to get slot
+          await this.retryRpcCall(
+            () => this.connection.getSlot('confirmed'),
+            'getSlot(healthCheck)',
           );
-          
-          this.logger.log(`Reconnected WebSocket subscription. New ID: ${this.subscriptionId}`);
-        } catch (reconnectError) {
-          this.logger.error('Failed to reconnect WebSocket', reconnectError);
-        }
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
+        } catch (error) {
+          this.logger.error(
+            'WebSocket connection health check failed, attempting reconnection',
+            error,
+          );
 
-    this.logger.log('Started WebSocket connection monitoring (every 5 minutes)');
+          // Attempt to restart indexing
+          try {
+            if (this.subscriptionId !== null) {
+              await this.connection.removeOnLogsListener(this.subscriptionId);
+              this.subscriptionId = null;
+            }
+
+            // Restart subscription
+            this.subscriptionId = this.connection.onLogs(
+              this.programId,
+              async (logs, context) => {
+                await this.processLogs(logs, context);
+              },
+              'confirmed',
+            );
+
+            this.logger.log(
+              `Reconnected WebSocket subscription. New ID: ${this.subscriptionId}`,
+            );
+          } catch (reconnectError) {
+            this.logger.error('Failed to reconnect WebSocket', reconnectError);
+          }
+        }
+      },
+      5 * 60 * 1000,
+    ); // Check every 5 minutes
+
+    this.logger.log(
+      'Started WebSocket connection monitoring (every 5 minutes)',
+    );
   }
 
   /**
@@ -683,5 +756,3 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
     };
   }
 }
-
-

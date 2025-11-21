@@ -1,6 +1,6 @@
 // Import reflect-metadata before TypeORM entities
 import 'reflect-metadata';
-import { calculateLevel, LEVEL_CONFIG } from '../../entities/user-level.entity';
+import { calculateLevel, LEVEL_CONFIG } from '../../utils/level-calculator';
 
 describe('UserLevel Entity', () => {
   describe('calculateLevel', () => {
@@ -90,7 +90,7 @@ describe('UserLevel Entity', () => {
         if (index < LEVEL_CONFIG.length - 1) {
           const nextConfig = LEVEL_CONFIG[index + 1];
           expect(result.nextLevelMints).toBe(
-            nextConfig.mintsRequired - config.mintsRequired
+            nextConfig.mintsRequired - config.mintsRequired,
           );
         }
       });
@@ -105,7 +105,7 @@ describe('UserLevel Entity', () => {
     it('should have increasing mintsRequired', () => {
       for (let i = 1; i < LEVEL_CONFIG.length; i++) {
         expect(LEVEL_CONFIG[i].mintsRequired).toBeGreaterThan(
-          LEVEL_CONFIG[i - 1].mintsRequired
+          LEVEL_CONFIG[i - 1].mintsRequired,
         );
       }
     });
@@ -122,4 +122,3 @@ describe('UserLevel Entity', () => {
     });
   });
 });
-

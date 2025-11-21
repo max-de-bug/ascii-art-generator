@@ -18,7 +18,7 @@ describe('NFT Controller (e2e)', () => {
     app = moduleFixture.createNestApplication();
     nftStorage = moduleFixture.get<NftStorageService>(NftStorageService);
     indexer = moduleFixture.get<SolanaIndexerService>(SolanaIndexerService);
-    
+
     await app.init();
   });
 
@@ -157,4 +157,3 @@ describe('NFT Controller (e2e)', () => {
     });
   });
 });
-

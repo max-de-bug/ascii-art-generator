@@ -54,4 +54,3 @@ export class NFT {
   @UpdateDateColumn()
   updatedAt: Date;
 }
-

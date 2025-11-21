@@ -46,4 +46,3 @@ export class User {
   @JoinColumn({ name: 'walletAddress' })
   userLevel?: UserLevel;
 }
-

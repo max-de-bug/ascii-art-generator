@@ -31,9 +31,7 @@ export const validationSchema = Joi.object({
     .default('confirmed'),
 
   // Buyback Configuration
-  BUYBACK_ENABLED: Joi.string()
-    .valid('true', 'false')
-    .default('false'),
+  BUYBACK_ENABLED: Joi.string().valid('true', 'false').default('false'),
   BUYBACK_THRESHOLD_SOL: Joi.number().min(0).default(0.1),
   BUYBACK_MAX_AMOUNT_SOL: Joi.number().min(0).default(10.0),
   BUYBACK_SLIPPAGE_BPS: Joi.number().min(0).max(10000).default(100),
@@ -55,4 +53,3 @@ export const validationSchema = Joi.object({
   RATE_LIMIT_VERY_STRICT_TTL: Joi.number().min(1).default(60),
   RATE_LIMIT_VERY_STRICT_MAX: Joi.number().min(1).default(5),
 });
-

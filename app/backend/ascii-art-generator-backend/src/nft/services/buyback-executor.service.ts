@@ -8,10 +8,7 @@ import {
   VersionedTransaction,
   SystemProgram,
 } from '@solana/web3.js';
-import {
-  TOKEN_PROGRAM_ID,
-  getAssociatedTokenAddress,
-} from '@solana/spl-token';
+import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from '@solana/spl-token';
 import { Program, AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -20,7 +17,6 @@ import { NftStorageService } from './nft-storage.service';
 import { BuybackMonitorService } from './buyback-monitor.service';
 // IDL will be loaded dynamically to avoid build-time issues
 let IDL: any;
-
 
 @Injectable()
 export class BuybackExecutorService {
@@ -33,35 +29,43 @@ export class BuybackExecutorService {
     private configService: ConfigService,
     private jupiterService: JupiterIntegrationService,
     private storageService: NftStorageService,
-    private monitorService: BuybackMonitorService
+    private monitorService: BuybackMonitorService,
   ) {
     this.initializeConnection();
     this.loadAuthorityKeypair();
   }
 
   private initializeConnection() {
-    const network = this.configService.get<string>('solana.network', 'mainnet-beta');
-    const rpcUrl = network === 'devnet' 
-      ? this.configService.get<string>('solana.rpcUrlDevnet')
-      : this.configService.get<string>('solana.rpcUrl');
-    
+    const network = this.configService.get<string>(
+      'solana.network',
+      'mainnet-beta',
+    );
+    const rpcUrl =
+      network === 'devnet'
+        ? this.configService.get<string>('solana.rpcUrlDevnet')
+        : this.configService.get<string>('solana.rpcUrl');
+
     if (!rpcUrl) {
       throw new Error('Missing Solana RPC URL configuration');
     }
-    
+
     this.connection = new Connection(rpcUrl, 'confirmed');
   }
 
   private loadAuthorityKeypair() {
-    const privateKey = this.configService.get<string>('buyback.authorityPrivateKey');
+    const privateKey = this.configService.get<string>(
+      'buyback.authorityPrivateKey',
+    );
 
     if (privateKey) {
       const keypairArray = JSON.parse(privateKey);
-      this.authorityKeypair = Keypair.fromSecretKey(new Uint8Array(keypairArray));
+      this.authorityKeypair = Keypair.fromSecretKey(
+        new Uint8Array(keypairArray),
+      );
       this.logger.log('Loaded authority keypair from environment variable');
     } else {
       throw new Error(
-        'AUTHORITY_KEYPAIR_PATH or AUTHORITY_PRIVATE_KEY must be set in environment'
+        'AUTHORITY_KEYPAIR_PATH or AUTHORITY_PRIVATE_KEY must be set in environment',
       );
     }
   }
@@ -71,7 +75,7 @@ export class BuybackExecutorService {
       this.logger.debug('Program already initialized');
       return;
     }
-    
+
     const programIdStr =
       this.configService.get<string>('solana.programId') ||
       '56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt';
@@ -80,12 +84,12 @@ export class BuybackExecutorService {
     if (!IDL) {
       const idlPath = path.join(
         __dirname,
-        '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json'
+        '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json',
       );
 
       if (!fs.existsSync(idlPath)) {
         throw new Error(
-          `IDL not found at ${idlPath}. Please run 'anchor build' first.`
+          `IDL not found at ${idlPath}. Please run 'anchor build' first.`,
         );
       }
 
@@ -96,7 +100,7 @@ export class BuybackExecutorService {
       publicKey: this.authorityKeypair.publicKey,
       payer: this.authorityKeypair,
       signTransaction: async <T extends Transaction | VersionedTransaction>(
-        tx: T
+        tx: T,
       ): Promise<T> => {
         if (tx instanceof VersionedTransaction) {
           tx.sign([this.authorityKeypair]);
@@ -106,7 +110,7 @@ export class BuybackExecutorService {
         return tx;
       },
       signAllTransactions: async <T extends Transaction | VersionedTransaction>(
-        txs: T[]
+        txs: T[],
       ): Promise<T[]> => {
         return Promise.all(
           txs.map(async (tx) => {
@@ -116,7 +120,7 @@ export class BuybackExecutorService {
               tx.sign(this.authorityKeypair);
             }
             return tx;
-          })
+          }),
         );
       },
     };
@@ -134,7 +138,7 @@ export class BuybackExecutorService {
    */
   async executeBuybackWithRetry(
     amountLamports: number,
-    maxRetries: number = 3
+    maxRetries: number = 3,
   ): Promise<string> {
     const retryAttempts =
       this.configService.get<number>('buyback.retryAttempts') || maxRetries;
@@ -175,11 +179,13 @@ export class BuybackExecutorService {
     // Get addresses
     const buybackTokenMint = new PublicKey(
       this.configService.get<string>('buyback.buybackTokenMint') ||
-      'AKzAhPPLMH5NG35kGbgkwtrTLeGyVrfCtApjnvqAATcm'
+        'AKzAhPPLMH5NG35kGbgkwtrTLeGyVrfCtApjnvqAATcm',
     );
-    const wsolMint = new PublicKey('So11111111111111111111111111111111111111112');
+    const wsolMint = new PublicKey(
+      'So11111111111111111111111111111111111111112',
+    );
     const jupiterProgramId = new PublicKey(
-      'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4'
+      'JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4',
     );
 
     // Get Jupiter quote
@@ -187,7 +193,7 @@ export class BuybackExecutorService {
       wsolMint.toString(),
       buybackTokenMint.toString(),
       amountLamports,
-      this.configService.get<number>('buyback.slippageBps') || 100
+      this.configService.get<number>('buyback.slippageBps') || 100,
     );
 
     if (!quote.outAmount) {
@@ -196,20 +202,21 @@ export class BuybackExecutorService {
 
     // Calculate minimum output
     const expectedOutput = BigInt(quote.outAmount);
-    const slippageBps = this.configService.get<number>('buyback.slippageBps') || 100;
+    const slippageBps =
+      this.configService.get<number>('buyback.slippageBps') || 100;
     const minimumOutput = this.jupiterService.calculateMinimumOutput(
       expectedOutput,
-      slippageBps
+      slippageBps,
     );
 
     this.logger.log(
-      `Quote: ${expectedOutput} tokens (min: ${minimumOutput} with ${slippageBps / 100}% slippage)`
+      `Quote: ${expectedOutput} tokens (min: ${minimumOutput} with ${slippageBps / 100}% slippage)`,
     );
 
     // Get swap transaction
     const swapResponse = await this.jupiterService.getSwapTransaction(
       quote,
-      this.authorityKeypair.publicKey.toString()
+      this.authorityKeypair.publicKey.toString(),
     );
 
     if (!swapResponse.swapTransaction) {
@@ -217,17 +224,22 @@ export class BuybackExecutorService {
     }
 
     // Parse transaction and extract instruction
-    const swapTransactionBuf = Buffer.from(swapResponse.swapTransaction, 'base64');
+    const swapTransactionBuf = Buffer.from(
+      swapResponse.swapTransaction,
+      'base64',
+    );
     const { VersionedTransaction } = require('@solana/web3.js');
     const deserializedTx = VersionedTransaction.deserialize(swapTransactionBuf);
     const message = deserializedTx.message;
 
     const compiledInstructions = message.compiledInstructions;
-    const jupiterInstructionIndex = compiledInstructions.findIndex((ix: any) => {
-      const programIdIndex = ix.programIdIndex;
-      const programId = message.staticAccountKeys[programIdIndex];
-      return programId && programId.equals(jupiterProgramId);
-    });
+    const jupiterInstructionIndex = compiledInstructions.findIndex(
+      (ix: any) => {
+        const programIdIndex = ix.programIdIndex;
+        const programId = message.staticAccountKeys[programIdIndex];
+        return programId && programId.equals(jupiterProgramId);
+      },
+    );
 
     if (jupiterInstructionIndex === -1) {
       throw new Error('Jupiter swap instruction not found in transaction');
@@ -239,18 +251,18 @@ export class BuybackExecutorService {
     // Get token accounts
     const wsolAccount = await getAssociatedTokenAddress(
       wsolMint,
-      this.authorityKeypair.publicKey
+      this.authorityKeypair.publicKey,
     );
     const buybackTokenAccount = await getAssociatedTokenAddress(
       buybackTokenMint,
-      this.authorityKeypair.publicKey
+      this.authorityKeypair.publicKey,
     );
 
     // Derive fee vault
     const programId = this.program.programId;
     const [feeVault] = PublicKey.findProgramAddressSync(
       [Buffer.from('fee_vault')],
-      programId
+      programId,
     );
 
     // Execute buyback
@@ -258,7 +270,7 @@ export class BuybackExecutorService {
       .executeBuyback(
         new BN(amountLamports),
         Array.from(instructionData),
-        new BN(minimumOutput.toString())
+        new BN(minimumOutput.toString()),
       )
       .accounts({
         authority: this.authorityKeypair.publicKey,
@@ -278,8 +290,8 @@ export class BuybackExecutorService {
             isSigner: idx < message.header.numRequiredSigners,
             isWritable:
               idx <
-              message.header.numRequiredSigners +
-                message.header.numReadonlySignedAccounts ||
+                message.header.numRequiredSigners +
+                  message.header.numReadonlySignedAccounts ||
               (idx >=
                 message.header.numRequiredSigners +
                   message.header.numReadonlySignedAccounts &&
@@ -287,7 +299,7 @@ export class BuybackExecutorService {
                   message.staticAccountKeys.length -
                     message.header.numReadonlyUnsignedAccounts),
           };
-        })
+        }),
       )
       .rpc();
 

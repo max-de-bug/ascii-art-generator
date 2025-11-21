@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { BuybackExecutorService } from './buyback-executor.service';
@@ -14,17 +19,21 @@ export class BuybackSchedulerService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private configService: ConfigService,
-    private executorService: BuybackExecutorService
+    private executorService: BuybackExecutorService,
   ) {
-    const network = this.configService.get<string>('solana.network', 'mainnet-beta');
-    const rpcUrl = network === 'devnet' 
-      ? this.configService.get<string>('solana.rpcUrlDevnet')
-      : this.configService.get<string>('solana.rpcUrl');
-    
+    const network = this.configService.get<string>(
+      'solana.network',
+      'mainnet-beta',
+    );
+    const rpcUrl =
+      network === 'devnet'
+        ? this.configService.get<string>('solana.rpcUrlDevnet')
+        : this.configService.get<string>('solana.rpcUrl');
+
     if (!rpcUrl) {
       throw new Error('Missing Solana RPC URL configuration');
     }
-    
+
     this.connection = new Connection(rpcUrl, 'confirmed');
   }
 
@@ -40,7 +49,7 @@ export class BuybackSchedulerService implements OnModuleInit, OnModuleDestroy {
       this.configService.get<number>('buyback.checkIntervalMs') || 3600000;
 
     this.logger.log(
-      `Starting buyback scheduler (checking every ${checkInterval / 1000 / 60} minutes)`
+      `Starting buyback scheduler (checking every ${checkInterval / 1000 / 60} minutes)`,
     );
 
     this.intervalId = setInterval(() => {
@@ -81,19 +90,19 @@ export class BuybackSchedulerService implements OnModuleInit, OnModuleDestroy {
 
       const programId = new PublicKey(
         this.configService.get<string>('solana.programId') ||
-        '56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt'
+          '56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt',
       );
 
       const [feeVault] = PublicKey.findProgramAddressSync(
         [Buffer.from('fee_vault')],
-        programId
+        programId,
       );
 
       const balance = await this.connection.getBalance(feeVault);
       const balanceSOL = balance / 1_000_000_000;
 
       this.logger.debug(
-        `Fee vault balance: ${balanceSOL} SOL (threshold: ${thresholdSOL} SOL)`
+        `Fee vault balance: ${balanceSOL} SOL (threshold: ${thresholdSOL} SOL)`,
       );
 
       if (balance < thresholdLamports) {
@@ -107,7 +116,7 @@ export class BuybackSchedulerService implements OnModuleInit, OnModuleDestroy {
       const amountLamports = Math.floor(amountToSwap * 1_000_000_000);
 
       this.logger.log(
-        `Executing buyback: ${amountToSwap} SOL (balance: ${balanceSOL} SOL)`
+        `Executing buyback: ${amountToSwap} SOL (balance: ${balanceSOL} SOL)`,
       );
 
       await this.executorService.executeBuybackWithRetry(amountLamports);

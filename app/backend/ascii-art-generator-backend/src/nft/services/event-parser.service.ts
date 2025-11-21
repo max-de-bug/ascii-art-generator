@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PublicKey, ParsedTransactionWithMeta } from '@solana/web3.js';
+import { BorshCoder, Idl, Event } from '@coral-xyz/anchor';
 import bs58 from 'bs58';
 
 /**
@@ -24,56 +25,84 @@ interface BuybackEvent {
 }
 
 /**
- * Service to parse Anchor events from Solana transactions
+ * Service to parse Anchor events from Solana transactions using Anchor's BorshCoder
  */
 @Injectable()
 export class EventParserService {
   private readonly logger = new Logger(EventParserService.name);
+  private coder: BorshCoder | null = null;
+  private idl: Idl | null = null;
 
   /**
-   * Parse MintEvent from transaction
-   * 
-   * Anchor events are emitted in the program logs.
-   * We look for logs containing "Program data:" which contains the event data.
+   * Set the IDL for event parsing
+   * This should be called with your program's IDL after service initialization
+   */
+  setIdl(idl: Idl): void {
+    this.idl = idl;
+    this.coder = new BorshCoder(idl);
+    this.logger.log('Anchor event parser initialized with IDL');
+  }
+
+  /**
+   * Parse MintEvent from transaction using Anchor's event decoder
+   *
+   * Anchor events are emitted in the program logs with format:
+   * "Program data: <base64_encoded_event_data>"
    */
   parseMintEvent(transaction: ParsedTransactionWithMeta): MintEvent | null {
+    if (!this.coder) {
+      this.logger.warn(
+        'Event parser not initialized with IDL. Call setIdl() first.',
+      );
+      return this.parseMintEventFallback(transaction);
+    }
+
     try {
       const logMessages = transaction.meta?.logMessages || [];
 
-      // Look for event data in logs
+      // Anchor events are in logs with format: "Program data: <base64_data>"
       for (const log of logMessages) {
         if (log.includes('Program data:')) {
           try {
-            // Extract base58 encoded data
+            // Extract base64 encoded data
             const match = log.match(/Program data: (.+)/);
             if (!match) continue;
 
             const encodedData = match[1];
-            
-            // Try to parse as base58
-            try {
-              const decoded = bs58.decode(encodedData);
-              
-              // Anchor events have an 8-byte discriminator
-              // Then the event data follows
-              // For MintEvent: discriminator + minter(32) + mint(32) + name + symbol + uri + timestamp(8)
-              
-              // Alternative: Look for event in transaction instructions
-              // Since Anchor events might be in instruction data
-              return this.parseMintEventFromInstruction(transaction);
-            } catch (decodeError) {
-              // Not base58, might be hex or other format
-              continue;
+
+            // Decode base64 to buffer
+            const data = Buffer.from(encodedData, 'base64');
+
+            // Use Anchor's event decoder
+            const event = this.coder.events.decode(data.toString('hex'));
+
+            if (!event) continue;
+
+            // Check if this is a MintEvent
+            if (event.name === 'MintEvent' || event.name === 'mintEvent') {
+              const eventData = event.data;
+
+              return {
+                minter: eventData.minter.toString(),
+                mint: eventData.mint.toString(),
+                name: eventData.name,
+                symbol: eventData.symbol,
+                uri: eventData.uri,
+                timestamp: eventData.timestamp.toNumber
+                  ? eventData.timestamp.toNumber()
+                  : eventData.timestamp,
+              };
             }
           } catch (error) {
-            this.logger.debug(`Error parsing log: ${log}`, error);
+            // Not an event we recognize, continue
+            this.logger.debug(`Could not decode event from log: ${log}`, error);
             continue;
           }
         }
       }
 
-      // Try parsing from instruction data as fallback
-      return this.parseMintEventFromInstruction(transaction);
+      // Fallback to manual parsing if Anchor decoder fails
+      return this.parseMintEventFallback(transaction);
     } catch (error) {
       this.logger.error('Error parsing MintEvent from transaction', error);
       return null;
@@ -81,52 +110,18 @@ export class EventParserService {
   }
 
   /**
-   * Parse MintEvent from transaction instruction data
-   * 
-   * This method extracts event data from the transaction structure.
-   * Anchor programs emit events via emit!() which appear in logs.
+   * Fallback parser for MintEvent when Anchor decoder is not available or fails
+   * Parses transaction logs manually
    */
-  private parseMintEventFromInstruction(
+  private parseMintEventFallback(
     transaction: ParsedTransactionWithMeta,
   ): MintEvent | null {
-    try {
-      // Look for mint instruction in the transaction
-      const instructions = transaction.transaction.message.instructions || [];
-
-      for (const instruction of instructions) {
-        // Check if this is our program instruction
-        if ('programId' in instruction) {
-          const programId = (instruction.programId as PublicKey).toString();
-          
-          // Check if instruction has accounts (mint instruction should have mint, minter, etc.)
-          if ('accounts' in instruction && Array.isArray(instruction.accounts)) {
-            const accounts = (instruction.accounts as PublicKey[]).map(acc => acc.toString());
-            
-            // Mint instruction typically has: mint, minter, mint_authority, etc.
-            if (accounts.length >= 2) {
-              // Try to extract data from parsed instruction
-              if ('parsed' in instruction && instruction.parsed) {
-                const parsed = instruction.parsed as any;
-                
-                // If we have parsed instruction data, extract from there
-                // This depends on how Anchor parses the instruction
-              }
-            }
-          }
-        }
-      }
-
-      // Since Anchor events are in logs, try parsing from logs more carefully
-      return this.parseMintEventFromLogs(transaction);
-    } catch (error) {
-      this.logger.error('Error parsing MintEvent from instruction', error);
-      return null;
-    }
+    return this.parseMintEventFromLogs(transaction);
   }
 
   /**
    * Parse MintEvent from transaction logs
-   * 
+   *
    * Anchor programs emit events using emit!() macro which creates log entries.
    * The event data is encoded and included in the logs.
    */
@@ -134,12 +129,12 @@ export class EventParserService {
     transaction: ParsedTransactionWithMeta,
   ): MintEvent | null {
     const logMessages = transaction.meta?.logMessages || [];
-    
+
     // Look for logs that might contain event information
     // Anchor events might appear as:
     // - "Program data: <base58_data>"
     // - Or in instruction data logs
-    
+
     for (const log of logMessages) {
       // Look for mint-related logs
       if (log.includes('Minted ASCII NFT') || log.includes('mint_ascii_nft')) {
@@ -151,18 +146,18 @@ export class EventParserService {
 
         // Get accounts from transaction to extract minter and mint
         const accountKeys = transaction.transaction.message.accountKeys || [];
-        
+
         // First account is usually the signer (minter)
         const minter = accountKeys[0]?.pubkey?.toString();
-        
+
         // Mint account is usually in the accounts array
         // We need to find the mint address - it's typically a new account created
         let mint: string | null = null;
-        
+
         // Check pre and post balances to find new accounts (the mint)
         const preBalances = transaction.meta?.preBalances || [];
         const postBalances = transaction.meta?.postBalances || [];
-        
+
         for (let i = 0; i < accountKeys.length; i++) {
           const account = accountKeys[i];
           // New accounts have 0 pre-balance and non-zero post-balance
@@ -175,7 +170,8 @@ export class EventParserService {
 
         // Alternative: Look for mint in instruction accounts
         if (!mint) {
-          const instructions = transaction.transaction.message.instructions || [];
+          const instructions =
+            transaction.transaction.message.instructions || [];
           for (const instruction of instructions) {
             if ('accounts' in instruction) {
               const accounts = instruction.accounts as any[];
@@ -192,7 +188,9 @@ export class EventParserService {
           const name = nameMatch[1].trim();
           const symbol = symbolMatch ? symbolMatch[1] : 'ASCII';
           const uri = uriMatch ? uriMatch[1] : '';
-          const timestamp = transaction.blockTime ? transaction.blockTime : Math.floor(Date.now() / 1000);
+          const timestamp = transaction.blockTime
+            ? transaction.blockTime
+            : Math.floor(Date.now() / 1000);
 
           return {
             minter,
@@ -210,11 +208,80 @@ export class EventParserService {
   }
 
   /**
-   * Parse BuybackEvent from transaction
-   * 
-   * Looks for buyback-related logs in the transaction
+   * Parse BuybackEvent from transaction using Anchor's event decoder
    */
-  parseBuybackEvent(transaction: ParsedTransactionWithMeta): BuybackEvent | null {
+  parseBuybackEvent(
+    transaction: ParsedTransactionWithMeta,
+  ): BuybackEvent | null {
+    if (!this.coder) {
+      this.logger.warn(
+        'Event parser not initialized with IDL. Call setIdl() first.',
+      );
+      return this.parseBuybackEventFallback(transaction);
+    }
+
+    try {
+      const logMessages = transaction.meta?.logMessages || [];
+
+      // Anchor events are in logs with format: "Program data: <base64_data>"
+      for (const log of logMessages) {
+        if (log.includes('Program data:')) {
+          try {
+            // Extract base64 encoded data
+            const match = log.match(/Program data: (.+)/);
+            if (!match) continue;
+
+            const encodedData = match[1];
+
+            // Decode base64 to buffer
+            const data = Buffer.from(encodedData, 'base64');
+
+            // Use Anchor's event decoder
+            const event = this.coder.events.decode(data.toString('hex'));
+
+            if (!event) continue;
+
+            // Check if this is a BuybackEvent
+            if (
+              event.name === 'BuybackEvent' ||
+              event.name === 'buybackEvent'
+            ) {
+              const eventData = event.data;
+
+              return {
+                amountSol: eventData.amountSol.toNumber
+                  ? eventData.amountSol.toNumber()
+                  : eventData.amountSol,
+                tokenAmount: eventData.tokenAmount.toNumber
+                  ? eventData.tokenAmount.toNumber()
+                  : eventData.tokenAmount,
+                timestamp: eventData.timestamp.toNumber
+                  ? eventData.timestamp.toNumber()
+                  : eventData.timestamp,
+              };
+            }
+          } catch (error) {
+            // Not an event we recognize, continue
+            this.logger.debug(`Could not decode event from log: ${log}`, error);
+            continue;
+          }
+        }
+      }
+
+      // Fallback to manual parsing if Anchor decoder fails
+      return this.parseBuybackEventFallback(transaction);
+    } catch (error) {
+      this.logger.error('Error parsing BuybackEvent from transaction', error);
+      return null;
+    }
+  }
+
+  /**
+   * Fallback parser for BuybackEvent
+   */
+  private parseBuybackEventFallback(
+    transaction: ParsedTransactionWithMeta,
+  ): BuybackEvent | null {
     try {
       const logMessages = transaction.meta?.logMessages || [];
 
@@ -223,15 +290,14 @@ export class EventParserService {
       for (const log of logMessages) {
         if (log.includes('Buyback executed:') || log.includes('buyback')) {
           // Extract amounts from log message
-          // Format: "Buyback executed: {amount} SOL swapped for {tokenAmount} tokens"
-          const solMatch = log.match(/Buyback executed: (\d+) SOL/);
-          const tokenMatch = log.match(/swapped for (\d+) tokens/);
+          const solMatch = log.match(/(\d+\.?\d*) SOL/);
+          const tokenMatch = log.match(/(\d+\.?\d*) tokens/);
 
           if (solMatch && tokenMatch) {
-            const amountSol = parseInt(solMatch[1], 10);
-            const tokenAmount = parseInt(tokenMatch[1], 10);
-            const timestamp = transaction.blockTime 
-              ? transaction.blockTime 
+            const amountSol = parseFloat(solMatch[1]);
+            const tokenAmount = parseFloat(tokenMatch[1]);
+            const timestamp = transaction.blockTime
+              ? transaction.blockTime
               : Math.floor(Date.now() / 1000);
 
             return {
@@ -245,9 +311,11 @@ export class EventParserService {
 
       return null;
     } catch (error) {
-      this.logger.error('Error parsing BuybackEvent from transaction', error);
+      this.logger.error(
+        'Error parsing BuybackEvent from transaction (fallback)',
+        error,
+      );
       return null;
     }
   }
 }
-

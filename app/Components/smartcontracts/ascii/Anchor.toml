@@ -1,24 +1,21 @@
 [toolchain]
-package_manager = "yarn"
 anchor_version = "0.30.1"
-
-
 
 [features]
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-ascii = "56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt"
-
 [programs.devnet]
+ascii = "DvGwWxoj4k1BQfRoEL18CNYnZ8XYZp1xYHSgBZdvaCKT"
+
+[programs.localnet]
 ascii = "56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "Devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

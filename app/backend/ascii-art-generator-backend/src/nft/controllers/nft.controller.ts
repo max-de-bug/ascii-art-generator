@@ -64,7 +64,10 @@ export class NftController {
    * Get buyback events
    */
   @Get('buybacks')
-  async getBuybackEvents(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+  async getBuybackEvents(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
     const limitNum = limit ? parseInt(limit, 10) : 50;
     const offsetNum = offset ? parseInt(offset, 10) : 0;
     return this.nftStorage.getBuybackEvents(limitNum, offsetNum);
@@ -80,4 +83,3 @@ export class NftController {
     return this.nftStorage.getBuybackStatistics();
   }
 }
-

@@ -8,4 +8,3 @@ import { NftModule } from '../nft/nft.module';
   controllers: [HealthController],
 })
 export class HealthModule {}
-

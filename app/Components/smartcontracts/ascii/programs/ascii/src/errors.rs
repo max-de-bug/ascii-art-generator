@@ -26,4 +26,10 @@ pub enum AsciiError {
     SlippageExceeded,
     #[msg("Swap does not use the expected WSOL account")]
     InvalidWSOLAccountInSwap,
+    #[msg("Buyback amount too low: must meet minimum threshold")]
+    BuybackAmountTooLow,
+    #[msg("Invalid treasury address")]
+    InvalidTreasury,
+    #[msg("Account already initialized")]
+    AlreadyInitialized,
 }

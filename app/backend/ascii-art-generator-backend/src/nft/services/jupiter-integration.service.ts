@@ -11,7 +11,7 @@ export class JupiterIntegrationService {
 
   /**
    * Get swap quote from Jupiter API
-   * 
+   *
    * @param inputMint - Input token mint address (e.g., WSOL)
    * @param outputMint - Output token mint address (e.g., buyback token)
    * @param amount - Amount in lamports
@@ -22,16 +22,19 @@ export class JupiterIntegrationService {
     inputMint: string,
     outputMint: string,
     amount: number,
-    slippageBps: number = 100
+    slippageBps: number = 100,
   ): Promise<any> {
     try {
-      const url = `${this.apiBase}/quote?` +
+      const url =
+        `${this.apiBase}/quote?` +
         `inputMint=${inputMint}&` +
         `outputMint=${outputMint}&` +
         `amount=${amount}&` +
         `slippageBps=${slippageBps}`;
 
-      this.logger.debug(`Fetching Jupiter quote: ${inputMint} → ${outputMint}, amount: ${amount}`);
+      this.logger.debug(
+        `Fetching Jupiter quote: ${inputMint} → ${outputMint}, amount: ${amount}`,
+      );
 
       const response = await fetch(url, {
         method: 'GET',
@@ -40,12 +43,14 @@ export class JupiterIntegrationService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Jupiter quote failed: ${response.statusText} - ${errorText}`);
+        throw new Error(
+          `Jupiter quote failed: ${response.statusText} - ${errorText}`,
+        );
       }
 
       const quote = await response.json();
       this.logger.debug(`Jupiter quote received: ${quote.outAmount} tokens`);
-      
+
       return quote;
     } catch (error) {
       this.logger.error('Error fetching Jupiter quote:', error);
@@ -55,14 +60,14 @@ export class JupiterIntegrationService {
 
   /**
    * Get swap transaction from Jupiter API
-   * 
+   *
    * @param quoteResponse - Quote response from getQuote()
    * @param userPublicKey - Public key of the user executing the swap
    * @returns Swap transaction (base64 encoded)
    */
   async getSwapTransaction(
     quoteResponse: any,
-    userPublicKey: string
+    userPublicKey: string,
   ): Promise<any> {
     try {
       const response = await fetch(`${this.apiBase}/swap`, {
@@ -79,12 +84,14 @@ export class JupiterIntegrationService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Jupiter swap failed: ${response.statusText} - ${errorText}`);
+        throw new Error(
+          `Jupiter swap failed: ${response.statusText} - ${errorText}`,
+        );
       }
 
       const swapResponse = await response.json();
       this.logger.debug('Jupiter swap transaction received');
-      
+
       return swapResponse;
     } catch (error) {
       this.logger.error('Error getting Jupiter swap transaction:', error);
@@ -94,7 +101,7 @@ export class JupiterIntegrationService {
 
   /**
    * Calculate minimum output with slippage protection
-   * 
+   *
    * @param expectedOutput - Expected output from quote
    * @param slippageBps - Slippage in basis points
    * @returns Minimum acceptable output amount
@@ -104,4 +111,3 @@ export class JupiterIntegrationService {
     return (expectedOutput * slippageMultiplier) / BigInt(10000);
   }
 }
-

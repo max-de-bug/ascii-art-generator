@@ -19,15 +19,19 @@ export class BuybackMonitorService {
     private configService: ConfigService,
     private storageService: NftStorageService,
   ) {
-    const network = this.configService.get<string>('solana.network', 'mainnet-beta');
-    const rpcUrl = network === 'devnet' 
-      ? this.configService.get<string>('solana.rpcUrlDevnet')
-      : this.configService.get<string>('solana.rpcUrl');
-    
+    const network = this.configService.get<string>(
+      'solana.network',
+      'mainnet-beta',
+    );
+    const rpcUrl =
+      network === 'devnet'
+        ? this.configService.get<string>('solana.rpcUrlDevnet')
+        : this.configService.get<string>('solana.rpcUrl');
+
     if (!rpcUrl) {
       throw new Error('Missing Solana RPC URL configuration');
     }
-    
+
     this.connection = new Connection(rpcUrl, 'confirmed');
   }
 
@@ -41,7 +45,7 @@ export class BuybackMonitorService {
     }
 
     this.logger.log('Starting buyback transaction monitoring');
-    
+
     this.monitoringIntervalId = setInterval(() => {
       this.checkPendingBuybacks().catch((error) => {
         this.logger.error('Error checking pending buybacks:', error);
@@ -73,9 +77,9 @@ export class BuybackMonitorService {
       // Get recent buyback events (last hour)
       const oneHourAgo = Math.floor(Date.now() / 1000) - 3600;
       const events = await this.storageService.getBuybackEvents(100, 0);
-      
+
       const recentEvents = events.filter(
-        (event) => event.timestamp >= oneHourAgo
+        (event) => event.timestamp >= oneHourAgo,
       );
 
       for (const event of recentEvents) {
@@ -135,7 +139,7 @@ export class BuybackMonitorService {
       const checkTransaction = async () => {
         try {
           const verified = await this.verifyBuybackTransaction(signature);
-          
+
           if (verified) {
             resolve(true);
             return;
@@ -163,4 +167,3 @@ export class BuybackMonitorService {
     });
   }
 }
-

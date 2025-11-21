@@ -25,7 +25,9 @@ describe('EventParserService', () => {
                 pubkey: new PublicKey('11111111111111111111111111111111'), // System Program (valid)
               },
               {
-                pubkey: new PublicKey('So11111111111111111111111111111111111111112'), // WSOL (valid)
+                pubkey: new PublicKey(
+                  'So11111111111111111111111111111111111111112',
+                ), // WSOL (valid)
               },
             ],
             instructions: [],
@@ -160,4 +162,3 @@ describe('EventParserService', () => {
     });
   });
 });
-

@@ -116,7 +116,10 @@ describe('JupiterIntegrationService', () => {
     it('should calculate minimum output with 1% slippage', () => {
       const expectedOutput = BigInt(1000000);
       const slippageBps = 100; // 1%
-      const result = service.calculateMinimumOutput(expectedOutput, slippageBps);
+      const result = service.calculateMinimumOutput(
+        expectedOutput,
+        slippageBps,
+      );
 
       // 1000000 * (10000 - 100) / 10000 = 990000
       expect(result).toBe(BigInt(990000));
@@ -125,7 +128,10 @@ describe('JupiterIntegrationService', () => {
     it('should calculate minimum output with 0.5% slippage', () => {
       const expectedOutput = BigInt(1000000);
       const slippageBps = 50; // 0.5%
-      const result = service.calculateMinimumOutput(expectedOutput, slippageBps);
+      const result = service.calculateMinimumOutput(
+        expectedOutput,
+        slippageBps,
+      );
 
       // 1000000 * (10000 - 50) / 10000 = 995000
       expect(result).toBe(BigInt(995000));
@@ -134,7 +140,10 @@ describe('JupiterIntegrationService', () => {
     it('should calculate minimum output with 5% slippage', () => {
       const expectedOutput = BigInt(1000000);
       const slippageBps = 500; // 5%
-      const result = service.calculateMinimumOutput(expectedOutput, slippageBps);
+      const result = service.calculateMinimumOutput(
+        expectedOutput,
+        slippageBps,
+      );
 
       // 1000000 * (10000 - 500) / 10000 = 950000
       expect(result).toBe(BigInt(950000));
@@ -143,10 +152,12 @@ describe('JupiterIntegrationService', () => {
     it('should handle zero slippage', () => {
       const expectedOutput = BigInt(1000000);
       const slippageBps = 0;
-      const result = service.calculateMinimumOutput(expectedOutput, slippageBps);
+      const result = service.calculateMinimumOutput(
+        expectedOutput,
+        slippageBps,
+      );
 
       expect(result).toBe(expectedOutput);
     });
   });
 });
-

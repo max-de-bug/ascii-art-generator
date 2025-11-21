@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, OptimisticLockVersionMismatchError } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { NFT } from '../entities/nft.entity';
-import { UserLevel, calculateLevel } from '../entities/user-level.entity';
+import { UserLevel } from '../entities/user-level.entity';
+import { calculateLevel } from '../utils/level-calculator';
 import { BuybackEvent } from '../entities/buyback-event.entity';
 
 /**
@@ -54,10 +55,7 @@ export class NftStorageService {
 
       // Update user level within the same transaction
       if (nft.minter) {
-        await this.updateUserLevelInTransaction(
-          queryRunner,
-          nft.minter,
-        );
+        await this.updateUserLevelInTransaction(queryRunner, nft.minter);
       }
 
       // Commit transaction
@@ -185,83 +183,18 @@ export class NftStorageService {
     await queryRunner.manager.save(UserLevel, userLevel);
 
     if (levelData.level > previousLevel) {
-      this.logger.log(`User ${walletAddress} leveled up to ${levelData.level}!`);
-    }
-  }
-
-  /**
-   * Update user level after minting (standalone, uses optimistic locking)
-   * Used when updating level outside of a transaction
-   */
-  private async updateUserLevel(walletAddress: string): Promise<void> {
-    const maxRetries = 3;
-    let retries = 0;
-
-    while (retries < maxRetries) {
-      try {
-        // Count NFTs for this user
-        const mintCount = await this.nftRepository.count({
-          where: { minter: walletAddress },
-        });
-
-        const levelData = calculateLevel(mintCount);
-
-        // Find user level (with optimistic locking via version column)
-        let userLevel = await this.userLevelRepository.findOne({
-          where: { walletAddress },
-        });
-
-        const previousLevel = userLevel?.level || 0;
-        const originalVersion = userLevel?.version || 0;
-
-        if (!userLevel) {
-          // Create new user level
-          userLevel = this.userLevelRepository.create({
-            walletAddress,
-            totalMints: mintCount,
-            level: levelData.level,
-            experience: levelData.experience,
-            nextLevelMints: levelData.nextLevelMints,
-            version: 1,
-          });
-        } else {
-          // Update existing user level
-          userLevel.totalMints = mintCount;
-          userLevel.level = levelData.level;
-          userLevel.experience = levelData.experience;
-          userLevel.nextLevelMints = levelData.nextLevelMints;
-        }
-
-        // Save with version check (optimistic locking)
-        await this.userLevelRepository.save(userLevel);
-
-        if (levelData.level > previousLevel) {
-          this.logger.log(`User ${walletAddress} leveled up to ${levelData.level}!`);
-        }
-
-        return; // Success, exit retry loop
-      } catch (error) {
-        if (error instanceof OptimisticLockVersionMismatchError) {
-          retries++;
-          if (retries >= maxRetries) {
-            this.logger.error(
-              `Failed to update user level after ${maxRetries} retries for ${walletAddress}`,
-            );
-            throw error;
-          }
-          // Wait a bit before retrying
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        } else {
-          throw error; // Re-throw non-version mismatch errors
-        }
-      }
+      this.logger.log(
+        `User ${walletAddress} leveled up to ${levelData.level}!`,
+      );
     }
   }
 
   /**
    * Save a buyback event
    */
-  async saveBuybackEvent(buyback: Partial<BuybackEvent>): Promise<BuybackEvent> {
+  async saveBuybackEvent(
+    buyback: Partial<BuybackEvent>,
+  ): Promise<BuybackEvent> {
     try {
       if (!buyback.transactionSignature) {
         throw new Error('Buyback event transaction signature is required');
@@ -273,7 +206,9 @@ export class NftStorageService {
       });
 
       if (existing) {
-        this.logger.debug(`Buyback event already exists: ${buyback.transactionSignature}`);
+        this.logger.debug(
+          `Buyback event already exists: ${buyback.transactionSignature}`,
+        );
         return existing;
       }
 
@@ -283,7 +218,10 @@ export class NftStorageService {
       this.logger.log(`Saved buyback event: ${buyback.transactionSignature}`);
       return savedBuyback;
     } catch (error) {
-      this.logger.error(`Error saving buyback event ${buyback.transactionSignature}`, error);
+      this.logger.error(
+        `Error saving buyback event ${buyback.transactionSignature}`,
+        error,
+      );
       throw error;
     }
   }
@@ -291,7 +229,10 @@ export class NftStorageService {
   /**
    * Get buyback events (with pagination)
    */
-  async getBuybackEvents(limit: number = 50, offset: number = 0): Promise<BuybackEvent[]> {
+  async getBuybackEvents(
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<BuybackEvent[]> {
     return this.buybackEventRepository.find({
       order: { timestamp: 'DESC' },
       take: limit,
@@ -329,12 +270,14 @@ export class NftStorageService {
    * Get statistics
    */
   async getStatistics() {
-    const [totalNfts, totalUsers, userLevels, buybackStats] = await Promise.all([
-      this.nftRepository.count(),
-      this.userLevelRepository.count(),
-      this.userLevelRepository.find(),
-      this.getBuybackStatistics(),
-    ]);
+    const [totalNfts, totalUsers, userLevels, buybackStats] = await Promise.all(
+      [
+        this.nftRepository.count(),
+        this.userLevelRepository.count(),
+        this.userLevelRepository.find(),
+        this.getBuybackStatistics(),
+      ],
+    );
 
     const totalMints = userLevels.reduce(
       (sum, level) => sum + level.totalMints,
@@ -349,4 +292,3 @@ export class NftStorageService {
     };
   }
 }
-

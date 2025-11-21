@@ -33,4 +33,3 @@ import solanaConfig from '../config/solana.config';
   exports: [NftStorageService, SolanaIndexerService, BuybackSchedulerService],
 })
 export class NftModule {}
-

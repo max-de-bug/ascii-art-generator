@@ -17,4 +17,3 @@ export default registerAs('throttler', () => ({
     limit: parseInt(process.env.RATE_LIMIT_VERY_STRICT_MAX || '5'), // Very strict (default: 5 per minute)
   },
 }));
-

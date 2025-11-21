@@ -1,9 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { 
-  HealthCheck, 
-  HealthCheckService, 
-  MemoryHealthIndicator, 
+import {
+  HealthCheck,
+  HealthCheckService,
+  MemoryHealthIndicator,
   DiskHealthIndicator,
   HealthIndicatorResult,
 } from '@nestjs/terminus';
@@ -30,7 +30,8 @@ export class HealthController {
       // Memory check - warn if using more than 1GB
       () => this.memory.checkHeap('memory_heap', 1024 * 1024 * 1024),
       // Disk check - warn if using more than 90% of disk
-      () => this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
+      () =>
+        this.disk.checkStorage('storage', { path: '/', thresholdPercent: 0.9 }),
       // Indexer status
       () => this.checkIndexer(),
       // Buyback status
@@ -88,4 +89,3 @@ export class HealthController {
     }
   }
 }
-
