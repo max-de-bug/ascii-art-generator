@@ -16,7 +16,7 @@ import { EventParserService } from './event-parser.service';
 import { NftStorageService } from './nft-storage.service';
 import { NFT } from '../entities/nft.entity';
 import { BuybackEvent } from '../entities/buyback-event.entity';
-import idl from '../../../../../idl/ascii.json';
+import idl from '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json';
 /**
  * Solana Indexer Service
  * Listens to Solana transactions and indexes MintEvent

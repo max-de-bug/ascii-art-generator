@@ -39,6 +39,15 @@ const pressStart2P = Press_Start_2P({
 export const metadata: Metadata = {
   title: "ASCII Art generator",
   description: "ASCII Art generator on solana",
+  icons: {
+    icon: [
+      { url: "/Logo_Black-modified.png", type: "image/png" },
+    ],
+    apple: [
+      { url: "/Logo_Black-modified.png", type: "image/png" },
+    ],
+    shortcut: "/Logo_Black-modified.png",
+  },
 };
 
 export default function RootLayout({

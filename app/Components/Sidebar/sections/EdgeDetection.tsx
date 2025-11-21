@@ -16,7 +16,10 @@ export const EdgeDetection = () => {
 
   return (
     <section>
-      <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
+      <h3 
+        className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide"
+        style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
+      >
         5. Edge Detection
       </h3>
       <p className="text-xs text-muted-foreground mb-3">Select one method:</p>

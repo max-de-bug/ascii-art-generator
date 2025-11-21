@@ -1,5 +1,4 @@
 "use client";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useEffect, useCallback, useRef } from "react";
@@ -86,7 +85,10 @@ export const GenerateTextSection = () => {
   }, [regenerateAscii]);
   return (
     <section>
-      <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
+      <h3 
+        className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide"
+        style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
+      >
         2. Generate from Text
       </h3>
       <div className="space-y-3">
@@ -105,13 +107,6 @@ export const GenerateTextSection = () => {
             className="min-h-20 bg-input border-border text-foreground text-xs"
           />
         </div>
-        <Button
-          onClick={regenerateAscii}
-          disabled={!inputText.trim()}
-          className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-        >
-          Generate
-        </Button>
       </div>
     </section>
   );

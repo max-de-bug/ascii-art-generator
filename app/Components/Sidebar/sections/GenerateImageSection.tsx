@@ -3,7 +3,6 @@ import { Input } from "@/components/ui/input";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { useAsciiStore } from "../../store/ascii-store";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { generateAsciiFromImage } from "../../utils/ascii-converter";
 export const GenerateImageSection = () => {
@@ -117,7 +116,10 @@ export const GenerateImageSection = () => {
 
   return (
     <section>
-      <h3 className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide">
+      <h3 
+        className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide"
+        style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
+      >
         1. Upload Your File
       </h3>
       <div className="space-y-3">
@@ -147,13 +149,6 @@ export const GenerateImageSection = () => {
             </div>
           )}
         </div>
-        <Button
-          onClick={regenerateAscii}
-          disabled={!imageFile}
-          className="w-full bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-        >
-          Generate
-        </Button>
       </div>
     </section>
   );

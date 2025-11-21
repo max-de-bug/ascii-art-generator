@@ -173,7 +173,7 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
       await navigator.clipboard.write([clipboardItem]);
 
       // Open Twitter compose window
-      const text = `Check out this ASCII art I generated!`;
+      const text = `🎨 Just created this amazing ASCII art! Check it out 👇\n\n(Paste the image below with Ctrl+V or Cmd+V)`;
       const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(
         text
       )}`;
@@ -219,6 +219,7 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
         onClick={copyToClipboard}
         disabled={!asciiOutput}
         className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+        style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
       >
         <span className="flex items-center gap-2">
           <CopyIcon className="size-4" />
@@ -229,6 +230,7 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
         onClick={downloadAsFile}
         disabled={!asciiOutput}
         className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+        style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
       >
         <span className="flex items-center gap-2">
           <DownloadIcon className="size-4" />
@@ -240,6 +242,7 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
         onClick={shareToTwitter}
         disabled={!asciiOutput}
         className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+        style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
       >
         <span className="flex items-center gap-2">
           Share on

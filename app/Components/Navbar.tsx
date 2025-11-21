@@ -15,18 +15,6 @@ export const Navbar = () => {
         </li>
         <li>
           <Link
-            href="/marketplace"
-            className="text-lg font-bold text-muted-foreground/50 cursor-not-allowed pointer-events-none"
-            style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
-            aria-disabled="true"
-            tabIndex={-1}
-          >
-            Marketplace
-          </Link>
-        
-        </li>
-        <li>
-          <Link
             href="/leaderboard"
             className="text-lg font-bold text-muted-foreground hover:text-foreground transition-colors cursor-not-allowed pointer-events-none opacity-50"
             style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
