@@ -103,7 +103,7 @@ export const createImageBlob = (
 
   // Add watermark in bottom-right corner
   const watermarkText = "powered by O.XYZ";
-  const watermarkFontSize = Math.max(baseFontSize * 0.4, 8); // 40% of base font, minimum 8px
+  const watermarkFontSize = Math.max(baseFontSize * 0.5, 10); // 50% of base font, minimum 10px
   ctx.font = `400 ${watermarkFontSize}px "Geist Mono", monospace`;
   ctx.textAlign = "right";
   ctx.textBaseline = "bottom";
@@ -218,28 +218,33 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
       <Button
         onClick={copyToClipboard}
         disabled={!asciiOutput}
-        className="px-6 py-2 bg-primary hover:bg-primary/80 text-primary-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs uppercase tracking-wide cursor-pointer"
+        className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
       >
-        <CopyIcon className="size-4" />
-        Copy
+        <span className="flex items-center gap-2">
+          <CopyIcon className="size-4" />
+          Copy
+        </span>
       </Button>
       <Button
         onClick={downloadAsFile}
         disabled={!asciiOutput}
-        className="px-6 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs uppercase tracking-wide cursor-pointer"
+        className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
       >
-        <DownloadIcon className="size-4" />
-        Download
+        <span className="flex items-center gap-2">
+          <DownloadIcon className="size-4" />
+          Download
+        </span>
       </Button>
 
       <Button
-        variant="outline"
-        className="px-6 py-2 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-xs uppercase tracking-wide cursor-pointer"
-        disabled={!asciiOutput}
         onClick={shareToTwitter}
+        disabled={!asciiOutput}
+        className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
       >
-        Share on
-        <XIcon className="size-4" />
+        <span className="flex items-center gap-2">
+          Share on
+          <XIcon className="size-4" />
+        </span>
       </Button>
     </div>
   );

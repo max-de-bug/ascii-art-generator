@@ -272,10 +272,10 @@ export class NftStorageService {
   async getStatistics() {
     const [totalNfts, totalUsers, userLevels, buybackStats] = await Promise.all(
       [
-        this.nftRepository.count(),
-        this.userLevelRepository.count(),
-        this.userLevelRepository.find(),
-        this.getBuybackStatistics(),
+      this.nftRepository.count(),
+      this.userLevelRepository.count(),
+      this.userLevelRepository.find(),
+      this.getBuybackStatistics(),
       ],
     );
 

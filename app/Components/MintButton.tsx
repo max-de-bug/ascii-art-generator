@@ -124,10 +124,12 @@ export const MintButton = () => {
         disabled={disabled || isMinting}
         aria-busy={isMinting}
         aria-disabled={disabled || isMinting}
-        className="w-full sm:w-[50%] bg-primary hover:bg-primary/80 text-primary-foreground font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+        className="w-full sm:w-[50%] bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-8 py-4 rounded-sm border-0"
       >
-        {icon && <span className="mr-2">{icon}</span>}
-        {text}
+        <span className="flex items-center justify-center gap-2">
+          {icon && <span>{icon}</span>}
+          {text.toUpperCase()}
+        </span>
       </Button>
     </div>
   );
