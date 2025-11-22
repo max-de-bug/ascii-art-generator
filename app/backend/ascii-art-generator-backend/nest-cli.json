@@ -4,10 +4,10 @@
   "sourceRoot": "src",
   "entryFile": "main",
   "compilerOptions": {
-    "deleteOutDir": true,
+    "deleteOutDir": false,
     "outDir": "./dist",
     "webpack": false,
-    "tsConfigPath": "tsconfig.json",
+    "tsConfigPath": "tsconfig.build.json",
     "assets": []
   }
 }

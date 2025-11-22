@@ -26,8 +26,8 @@ import { NFTStorage, File } from "nft.storage";
 /**
  * Initialize NFT.Storage client
  */
-function getNFTStorageClient(apiKey?: string): NFTStorage {
-  const key = apiKey || process.env.NEXT_PUBLIC_NFT_STORAGE_KEY;
+function getNFTStorageClient(): NFTStorage {
+  const key = process.env.NEXT_PUBLIC_NFT_STORAGE_KEY;
 
   if (!key) {
     throw new Error(
@@ -42,12 +42,10 @@ function getNFTStorageClient(apiKey?: string): NFTStorage {
  * Upload image to IPFS via NFT.Storage
  *
  * @param imageBlob - The image blob to upload
- * @param apiKey - Optional API key (or use env var)
  * @returns IPFS URL (ipfs://...)
  */
 export async function uploadImageToNFTStorage(
   imageBlob: Blob,
-  apiKey?: string
 ): Promise<string> {
   // Runtime check - ensure this only runs in the browser
   if (typeof window === "undefined") {
@@ -55,7 +53,7 @@ export async function uploadImageToNFTStorage(
   }
 
   try {
-    const client = getNFTStorageClient(apiKey);
+    const client = getNFTStorageClient();
 
     // Convert blob to File object for NFT.Storage
     const imageFile = new File([imageBlob], "ascii-art.png", {
@@ -77,7 +75,6 @@ export async function uploadImageToNFTStorage(
  * Upload metadata JSON to IPFS via NFT.Storage
  *
  * @param metadata - The metadata object to upload
- * @param apiKey - Optional API key (or use env var)
  * @returns IPFS URL (ipfs://...)
  */
 export async function uploadMetadataToNFTStorage(
@@ -87,10 +84,9 @@ export async function uploadMetadataToNFTStorage(
     image: string;
     attributes?: Array<{ trait_type: string; value: string }>;
   },
-  apiKey?: string
 ): Promise<string> {
   try {
-    const client = getNFTStorageClient(apiKey);
+    const client = getNFTStorageClient();
 
     // Convert metadata to File object
     const metadataFile = new File(
@@ -118,7 +114,6 @@ export async function uploadMetadataToNFTStorage(
  *
  * @param imageBlob - The image blob to upload
  * @param metadata - The metadata object (without image field)
- * @param apiKey - Optional API key (or use env var)
  * @returns IPFS URL for metadata (ipfs://...)
  */
 export async function uploadNFTToNFTStorage(
@@ -128,7 +123,6 @@ export async function uploadNFTToNFTStorage(
     description: string;
     attributes?: Array<{ trait_type: string; value: string }>;
   },
-  apiKey?: string
 ): Promise<string> {
   // Runtime check - ensure this only runs in the browser
   if (typeof window === "undefined") {
@@ -136,7 +130,7 @@ export async function uploadNFTToNFTStorage(
   }
 
   try {
-    const client = getNFTStorageClient(apiKey);
+    const client = getNFTStorageClient();
 
     // Convert blob to File object
     const imageFile = new File([imageBlob], "ascii-art.png", {

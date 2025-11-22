@@ -48,7 +48,7 @@ export class JupiterIntegrationService {
         );
       }
 
-      const quote = await response.json();
+      const quote = await response.json() as { outAmount: string; [key: string]: any };
       this.logger.debug(`Jupiter quote received: ${quote.outAmount} tokens`);
 
       return quote;

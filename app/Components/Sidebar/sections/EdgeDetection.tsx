@@ -32,7 +32,9 @@ export const EdgeDetection = () => {
           <RadioGroupItem value="none" id="edgeNone" />
           <Label
             htmlFor="edgeNone"
-            className="text-xs text-muted-foreground cursor-pointer"
+            className={`text-xs cursor-pointer transition-colors duration-300 hover:text-white ${
+              edgeMethod === "none" ? "text-white" : "text-muted-foreground"
+            }`}
           >
             No Edge Detection
           </Label>
@@ -41,7 +43,9 @@ export const EdgeDetection = () => {
           <RadioGroupItem value="sobel" id="edgeSobel" />
           <Label
             htmlFor="edgeSobel"
-            className="text-xs text-muted-foreground cursor-pointer"
+            className={`text-xs cursor-pointer transition-colors duration-300 hover:text-white ${
+              edgeMethod === "sobel" ? "text-white" : "text-muted-foreground"
+            }`}
           >
             Sobel Edge Detection
           </Label>
@@ -50,7 +54,9 @@ export const EdgeDetection = () => {
           <RadioGroupItem value="dog" id="edgeDoG" />
           <Label
             htmlFor="edgeDoG"
-            className="text-xs text-muted-foreground cursor-pointer"
+            className={`text-xs cursor-pointer transition-colors duration-300 hover:text-white ${
+              edgeMethod === "dog" ? "text-white" : "text-muted-foreground"
+            }`}
           >
             DoG (Contour) Detection
           </Label>

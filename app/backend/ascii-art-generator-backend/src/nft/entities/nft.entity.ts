@@ -13,8 +13,6 @@ import {
  */
 @Entity('nfts')
 @Index(['mint'])
-@Index(['minter'])
-@Index(['transactionSignature'])
 export class NFT {
   @PrimaryGeneratedColumn('uuid')
   id: string;

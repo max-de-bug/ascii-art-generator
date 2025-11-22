@@ -11,8 +11,6 @@ import {
  * Tracks buyback transactions when fees are swapped for buyback tokens
  */
 @Entity('buyback_events')
-@Index(['timestamp'])
-@Index(['transactionSignature'], { unique: true })
 export class BuybackEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;

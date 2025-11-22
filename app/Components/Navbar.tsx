@@ -24,6 +24,17 @@ export const Navbar = () => {
             Leaderboard
           </Link>
         </li>
+        <li>
+          <Link
+            href="/explore"
+            className="text-lg font-bold text-muted-foreground hover:text-foreground transition-colors cursor-not-allowed pointer-events-none opacity-50"
+            style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
+            aria-disabled="true"
+            tabIndex={-1}
+          >
+          Explore
+          </Link>
+        </li>
       </ul>
     </nav>
   );

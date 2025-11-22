@@ -53,7 +53,8 @@ import { BuybackEvent } from './nft/entities/buyback-event.entity';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_NAME,
       entities: [NFT, User, UserLevel, BuybackEvent],
-      synchronize: false,
+      synchronize: process.env.NODE_ENV !== 'production',
+      dropSchema: process.env.DROP_SCHEMA === 'true', // Set DROP_SCHEMA=true in .env to drop and recreate schema
       ssl: {
         rejectUnauthorized: false,
       },
