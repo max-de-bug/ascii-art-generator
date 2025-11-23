@@ -9,7 +9,9 @@ import { PublicKey } from "@solana/web3.js";
  */
 
 // Default program ID (from lib.rs declare_id!)
-const DEFAULT_PROGRAM_ID = "56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt";
+// IMPORTANT: This must match the program ID in the IDL file
+// Current IDL program ID: DvGwWxoj4k1BQfRoEL18CNYnZ8XYZp1xYHSgBZdvaCKT
+const DEFAULT_PROGRAM_ID = "DvGwWxoj4k1BQfRoEL18CNYnZ8XYZp1xYHSgBZdvaCKT";
 
 // Network-specific program IDs
 // These should be set in environment variables or updated after deployment

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { mintAsciiArtNFTAnchor } from "./utils/mint-nft-anchor";
 import { useNetwork } from "./Providers/network-provider";
 import { getProgramId, getSolscanUrl } from "./utils/network-config";
+import { createImageBlob } from "./AsciiActions";
 
 export const MintButton = () => {
   const { asciiOutput, zoom } = useAsciiStore();
@@ -33,7 +34,6 @@ export const MintButton = () => {
       toast.loading("Creating image...", { id: "mint" });
 
       // Create image blob
-      const { createImageBlob } = await import("./AsciiActions");
       const imageBlob = await createImageBlob(asciiOutput, zoom, "#000000");
 
       if (!imageBlob) {
@@ -46,7 +46,7 @@ export const MintButton = () => {
       // Get network-specific program ID
       const programId = getProgramId(network);
 
-      toast.loading("Minting NFT via Anchor program...", { id: "mint" });
+      toast.loading("Minting ASCII art NFT...", { id: "mint" });
 
       // Mint NFT using Anchor program
       // NFT.Storage API key is read from NEXT_PUBLIC_NFT_STORAGE_KEY env var
@@ -75,10 +75,33 @@ export const MintButton = () => {
       console.log("Transaction signature:", signature);
     } catch (error: any) {
       console.error("Minting error:", error);
-      toast.error(
-        error?.message || "Failed to mint ASCII art. Please try again.",
-        { id: "mint" }
-      );
+      
+      // Handle user rejection gracefully
+      // Check error name, constructor name, or message for rejection indicators
+      const isUserRejection =
+        error?.name === "WalletSignTransactionError" ||
+        error?.constructor?.name === "WalletSignTransactionError" ||
+        error?.message?.toLowerCase().includes("rejected") ||
+        error?.message?.toLowerCase().includes("denied") ||
+        error?.message?.toLowerCase().includes("user rejected") ||
+        error?.message?.toLowerCase().includes("user cancelled") ||
+        error?.message?.toLowerCase().includes("cancelled") ||
+        error?.code === 4001 || // Common rejection code
+        error?.code === "ACTION_REJECTED" ||
+        error?.code === "USER_REJECTED";
+
+      if (isUserRejection) {
+        toast.info("Transaction cancelled. No changes were made.", {
+          id: "mint",
+          duration: 3000,
+        });
+      } else {
+        // Show error for other failures
+        toast.error(
+          error?.message || "Failed to mint ASCII art. Please try again.",
+          { id: "mint" }
+        );
+      }
     } finally {
       setIsMinting(false);
     }

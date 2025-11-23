@@ -1,5 +1,9 @@
 use wasm_bindgen::prelude::*;
 
+// Image compression module
+mod image_compression;
+pub use image_compression::*;
+
 // Helper function to clamp values
 #[inline]
 fn clamp(value: f64, min: f64, max: f64) -> f64 {

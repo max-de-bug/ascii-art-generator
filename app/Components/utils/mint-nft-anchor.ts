@@ -5,6 +5,8 @@ import {
   VersionedTransaction,
   SystemProgram,
   SYSVAR_RENT_PUBKEY,
+  LAMPORTS_PER_SOL,
+  Keypair,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -12,7 +14,7 @@ import {
   getAssociatedTokenAddress,
 } from "@solana/spl-token";
 import { Program, AnchorProvider, Wallet, BN, Idl } from "@coral-xyz/anchor";
-// Import NFT.Storage functions (IPFS via free API)
+// Import Lighthouse IPFS storage functions
 // Use dynamic import to ensure client-only loading
 const loadNFTStorage = () => import("./storage-nft");
 
@@ -85,7 +87,6 @@ interface MintNFTParams {
   programId: PublicKey;
   name?: string;
   description?: string;
-  nftStorageKey?: string; // Optional: NFT.Storage API key (or use env var)
 }
 
 /**
@@ -124,6 +125,100 @@ function deriveFeeVaultPDA(programId: PublicKey): [PublicKey, number] {
 }
 
 /**
+ * Derive the config PDA
+ * PDA seeds: ["config"]
+ */
+function deriveConfigPDA(programId: PublicKey): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("config")],
+    programId
+  );
+}
+
+/**
+ * Initialize the program config account
+ * This must be called once before minting NFTs
+ * 
+ * @param connection - Solana connection
+ * @param wallet - Wallet public key
+ * @param signTransaction - Transaction signing function
+ * @param treasury - Treasury address where buyback tokens go (defaults to wallet)
+ * @returns Transaction signature
+ */
+export async function initializeProgramConfig({
+  connection,
+  wallet,
+  signTransaction,
+  treasury,
+}: {
+  connection: Connection;
+  wallet: PublicKey;
+  signTransaction: (tx: Transaction) => Promise<Transaction>;
+  treasury?: PublicKey; // Optional, defaults to wallet
+}): Promise<string> {
+  // Create Anchor-compatible wallet
+  const anchorWallet = createAnchorWallet(wallet, signTransaction);
+
+  // Create Anchor provider
+  const provider = new AnchorProvider(connection, anchorWallet, {
+    commitment: "confirmed",
+  });
+
+  // Load IDL
+  let idl: Idl;
+  try {
+    if (typeof window === "undefined") {
+      throw new Error("IDL loading must happen client-side");
+    }
+    const idlModule = await import(
+      "../smartcontracts/ascii/target/idl/ascii.json"
+    );
+    idl = (idlModule.default || idlModule) as Idl;
+  } catch (error) {
+    throw new Error(
+      "IDL not found. Please run 'anchor build' in the smartcontracts/ascii directory first."
+    );
+  }
+
+  // Load the program - this uses the program ID from the IDL (source of truth)
+  const program = new Program(idl, provider);
+  
+  // Use IDL's program ID (this is the source of truth)
+  const programId = program.programId;
+  const treasuryAddress = treasury || wallet; // Default to wallet if not provided
+
+  // Derive PDAs using IDL's program ID
+  const [configPDA] = deriveConfigPDA(programId);
+  const [feeVault] = deriveFeeVaultPDA(programId);
+
+  // Check if config already exists
+  const configAccountInfo = await connection.getAccountInfo(configPDA);
+  if (configAccountInfo) {
+    throw new Error(
+      `Program config already initialized at ${configPDA.toString()}`
+    );
+  }
+
+  // Initialize config
+  const signature = await program.methods
+    .initializeConfig(treasuryAddress)
+    .accounts({
+      config: configPDA,
+      authority: wallet,
+      feeVault: feeVault,
+      systemProgram: SystemProgram.programId,
+    })
+    .rpc();
+
+  console.log(`✓ Config initialized with Program ID: ${programId.toString()}`);
+  console.log(`✓ Config PDA: ${configPDA.toString()}`);
+  console.log(`✓ Treasury: ${treasuryAddress.toString()}`);
+  console.log(`✓ Transaction: ${signature}`);
+
+  return signature;
+}
+
+/**
  * Mint an NFT using the Anchor program
  */
 export async function mintAsciiArtNFTAnchor({
@@ -135,18 +230,17 @@ export async function mintAsciiArtNFTAnchor({
   programId,
   name = "ASCII Art",
   description = "Generated ASCII art",
-  nftStorageKey,
 }: MintNFTParams): Promise<{
   mint: PublicKey;
   signature: string;
 }> {
-  // 1. Upload image and metadata to IPFS via NFT.Storage (free storage)
-  // NFT.Storage provides free IPFS storage up to 31GB
+  // 1. Upload image and metadata to IPFS via Lighthouse
+  // Lighthouse provides decentralized IPFS storage
   // Use dynamic import to ensure client-only loading (avoids Node.js module issues)
   const { uploadImageToNFTStorage, uploadMetadataToNFTStorage } = await loadNFTStorage();
   
   // Upload image first to get IPFS URL
-  const imageUri = await uploadImageToNFTStorage(imageBlob, nftStorageKey);
+  const imageUri = await uploadImageToNFTStorage(imageBlob);
 
   // Create metadata with image IPFS URL
   const metadata = {
@@ -166,7 +260,7 @@ export async function mintAsciiArtNFTAnchor({
   };
 
   // Upload metadata to IPFS
-  const metadataUri = await uploadMetadataToNFTStorage(metadata, nftStorageKey);
+  const metadataUri = await uploadMetadataToNFTStorage(metadata);
 
   // 4. Create Anchor-compatible wallet adapter
   // ✅ BEST PRACTICE: Use reusable utility function (see createAnchorWallet above)
@@ -214,23 +308,81 @@ export async function mintAsciiArtNFTAnchor({
   // 8. Derive PDAs
   const [mintAuthority] = deriveMintAuthorityPDA(program.programId);
   const [feeVault] = deriveFeeVaultPDA(program.programId);
+  const [configPDA] = deriveConfigPDA(program.programId);
+
+  // 8.5. Check if config account exists
+  // Note: The config must be initialized by the program deployer/owner before users can mint
+  // This is a one-time setup that should be done after program deployment
+  let configAccountInfo = await connection.getAccountInfo(configPDA, "finalized");
+  if (!configAccountInfo) {
+    configAccountInfo = await connection.getAccountInfo(configPDA, "confirmed");
+  }
+  
+  if (!configAccountInfo) {
+    const programIdStr = program.programId.toString();
+    const network = connection.rpcEndpoint.includes("devnet") ? "devnet" : 
+                   connection.rpcEndpoint.includes("mainnet") ? "mainnet" : "unknown";
+    
+    throw new Error(
+      `Program config not initialized.\n\n` +
+      `The program config must be initialized by the program deployer before users can mint NFTs.\n\n` +
+      `Program ID: ${programIdStr}\n` +
+      `Network: ${network}\n` +
+      `Config PDA: ${configPDA.toString()}\n\n` +
+      `To initialize, the program owner should run:\n` +
+      `await initializeProgramConfig({\n` +
+      `  connection,\n` +
+      `  wallet: deployerWallet,\n` +
+      `  signTransaction,\n` +
+      `  treasury: treasuryAddress, // Your treasury address\n` +
+      `});\n\n` +
+      `Note: This is a one-time setup. After initialization, all users can mint without any setup.`
+    );
+  }
+  
+  console.log(`✓ Config account found at ${configPDA.toString()}`);
 
   // 9. Generate a new mint keypair (we'll use a random keypair for uniqueness)
-  const { Keypair } = await import("@solana/web3.js");
   const mintKeypair = Keypair.generate();
   const mint = mintKeypair.publicKey; // This becomes the unique NFT identifier
 
-  // 10. Get associated token account
+  // 10. Check wallet balance before proceeding
+  const walletBalance = await connection.getBalance(wallet);
+  const minRequiredBalance = 0.1 * LAMPORTS_PER_SOL; // ~0.1 SOL for fees and rent
+  
+  if (walletBalance < minRequiredBalance) {
+    const balanceSOL = walletBalance / LAMPORTS_PER_SOL;
+    const requiredSOL = minRequiredBalance / LAMPORTS_PER_SOL;
+    throw new Error(
+      `Insufficient SOL balance. You have ${balanceSOL.toFixed(4)} SOL, but need at least ${requiredSOL.toFixed(4)} SOL for transaction fees and rent.`
+    );
+  }
+
+  // 11. Create the mint account as uninitialized (owned by System Program)
+  // This must be done before calling the instruction so the program can initialize it with Token program
+  const mintRent = await connection.getMinimumBalanceForRentExemption(82); // Mint account size
+  const createMintAccountIx = SystemProgram.createAccount({
+    fromPubkey: wallet,
+    newAccountPubkey: mint,
+    lamports: mintRent,
+    space: 82,
+    programId: SystemProgram.programId, // Uninitialized, will be assigned to Token program by initialize_mint
+  });
+
+  // 12. Get associated token account
+  // Note: Anchor's `init` constraint with `associated_token` will automatically create this
   const associatedTokenAccount = await getAssociatedTokenAddress(mint, wallet);
 
-  // 11. Derive metadata PDA
+  // 13. Derive metadata PDA
   const [metadataPDA] = deriveMetadataPDA(mint);
 
-  // 12. Build and send the transaction
-  // Note: .rpc() already sends and confirms the transaction based on the provider's commitment level
-  const tx = await program.methods
+  // 14. Build and send the transaction
+  // The mint account is created as uninitialized, then the program initializes it with Token program
+  // Anchor's `init` constraint with `associated_token` will automatically create the ATA
+  const signature = await program.methods
     .mintAsciiNft(name, "ASCII", metadataUri, new BN(asciiArt.length))
     .accounts({
+      config: configPDA, // Required: Program config account
       payer: wallet,
       tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
@@ -243,14 +395,15 @@ export async function mintAsciiArtNFTAnchor({
       tokenProgram: TOKEN_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
     })
+    .preInstructions([createMintAccountIx])
     .signers([mintKeypair])
     .rpc();
 
-  // 13. Additional confirmation using modern API (optional, .rpc() already confirms)
+  // 14. Additional confirmation using modern API (optional, .rpc() already confirms)
   const latestBlockhash = await connection.getLatestBlockhash("confirmed");
   await connection.confirmTransaction(
     {
-      signature: tx,
+      signature,
       blockhash: latestBlockhash.blockhash,
       lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
     },
@@ -259,6 +412,6 @@ export async function mintAsciiArtNFTAnchor({
 
   return {
     mint,
-    signature: tx,
+    signature,
   };
 }

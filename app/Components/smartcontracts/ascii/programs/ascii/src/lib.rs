@@ -8,7 +8,7 @@ use anchor_lang::system_program;
 use std::str::FromStr;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{mint_to, initialize_mint, Mint, MintTo, Token, TokenAccount, InitializeMint, sync_native, SyncNative},
+    token::{mint_to, initialize_mint, MintTo, Token, TokenAccount, InitializeMint, sync_native, SyncNative},
 };
 
 use mpl_token_metadata::{
@@ -356,7 +356,7 @@ pub mod ascii {
 
         msg!("Collected mint fee: {} lamports ({} SOL)", mint_fee, mint_fee as f64 / 1_000_000_000.0);
 
-        // Initialize the mint account
+        // Initialize the mint account with Token program
         // The mint authority is the mint_authority PDA
         let bump = ctx.bumps.mint_authority;
         let mint_authority_seeds = &[
@@ -366,6 +366,7 @@ pub mod ascii {
         let signer = &[&mint_authority_seeds[..]];
 
         // Initialize mint with 0 decimals (NFT standard) and mint_authority as authority
+        // The mint account must be created by the client as uninitialized before calling this instruction
         initialize_mint(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -578,13 +579,10 @@ pub struct MintAsciiNft<'info> {
     pub mint_authority: UncheckedAccount<'info>,
 
     /// The mint account for the NFT
-    /// We use a unique seed based on the payer and a nonce to ensure uniqueness
-    #[account(
-        init,
-        payer = payer,
-        space = 82, // Mint account size
-    )]
-    pub mint: Account<'info, Mint>,
+    /// CHECK: This account must be created by the client as uninitialized (owned by System Program)
+    /// It will be initialized by `initialize_mint` CPI call which assigns it to Token program
+    #[account(mut)]
+    pub mint: Signer<'info>,
 
     /// The associated token account for the NFT
     /// Using init for safety - each NFT gets a fresh mint and token account
