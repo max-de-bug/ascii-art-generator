@@ -116,7 +116,7 @@ async function optimizeImageBlobJS(
         },
         "image/jpeg",
         quality
-      );
+    );
     };
 
     img.onerror = () => {
@@ -166,8 +166,12 @@ async function uploadFileToLighthouse(
       throw new Error("Invalid response from Lighthouse: " + JSON.stringify(response));
     }
 
-    // Return IPFS URL
-    return `ipfs://${response.data.Hash}`;
+    const hash = response.data.Hash;
+    
+    // Return HTTP gateway URL for better wallet/explorer compatibility
+    // Most wallets can't resolve ipfs:// URIs directly
+    // Using Lighthouse gateway for reliability (they host the files)
+    return `https://gateway.lighthouse.storage/ipfs/${hash}`;
   } catch (error) {
     console.error("Error uploading to Lighthouse:", error);
     throw error;
@@ -206,9 +210,9 @@ export async function uploadMetadataToNFTStorage(
 ): Promise<string> {
   // Convert metadata to Blob
   const metadataBlob = new Blob(
-    [JSON.stringify(metadata, null, 2)],
+      [JSON.stringify(metadata, null, 2)],
     { type: "application/json" }
-  );
+    );
 
   return uploadFileToLighthouse(metadataBlob, "metadata.json");
 }

@@ -407,6 +407,7 @@ dependencies = [
  "bincode",
  "mpl-token-metadata",
  "proc-macro2",
+ "spl-token",
 ]
 
 [[package]]

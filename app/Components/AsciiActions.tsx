@@ -33,9 +33,19 @@ export const createImageBlob = (
 
   const lines = asciiOutput
     .split("\n")
-    .filter((line) => line.trim().length > 0);
+    .filter((line) => line.length > 0);
+  
+  // Also check if there's any non-whitespace content at all
+  const hasContent = lines.some((line) => line.trim().length > 0);
+  
   if (lines.length === 0) {
+    console.warn("createImageBlob: ASCII output has no lines");
     return Promise.resolve(null);
+  }
+  
+  if (!hasContent) {
+    console.warn("createImageBlob: ASCII output is all whitespace, but still creating image");
+    // Still proceed - whitespace-only ASCII art is valid (could be minimal art)
   }
 
   // Use minimal padding to maximize canvas usage

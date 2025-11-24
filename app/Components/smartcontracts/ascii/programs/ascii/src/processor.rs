@@ -5,32 +5,20 @@ use anchor_lang::solana_program::{
 };
 use anchor_lang::system_program;
 use std::str::FromStr;
-use anchor_spl::token::{mint_to, MintTo, sync_native, SyncNative};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token::{mint_to, initialize_mint, MintTo, Token, TokenAccount, InitializeMint, sync_native, SyncNative},
+};
 use mpl_token_metadata::{
     instructions::CreateMetadataAccountV3CpiBuilder,
     types::DataV2,
 };
 
-// Declare modules
-pub mod errors;
-pub mod events;
-pub mod state;
-pub mod instructions;
-pub mod constants;
+// Import from parent module
+use crate::*;
 
-// Import from modules
-use errors::AsciiError;
-use events::{MintEvent, BuybackEvent};
-use instructions::*;
-use constants::*;
-
-declare_id!("DvGwWxoj4k1BQfRoEL18CNYnZ8XYZp1xYHSgBZdvaCKT");
-
-#[program]
-pub mod ascii {
-    use super::*;
-
-    pub fn initialize_config(
+// Instruction handler functions (called from #[program] in lib.rs)
+pub fn initialize_config(
         ctx: Context<InitializeConfig>,
         treasury: Pubkey,
     ) -> Result<()> {
@@ -201,6 +189,7 @@ pub mod ascii {
         // Capture initial balance to verify tokens were received after swap
         let initial_token_balance = ctx.accounts.buyback_token_account.amount;
 
+
         // Build the swap instruction
         let swap_ix = Instruction {
             program_id: ctx.accounts.jupiter_program.key(),
@@ -298,10 +287,12 @@ pub mod ascii {
 
         msg!("Collected mint fee: {} lamports ({} SOL)", mint_fee, mint_fee as f64 / 1_000_000_000.0);
 
-        // The mint is created and initialized by client pre-instructions
-        // We just verify it's properly set up
+        // Handle mint account creation and initialization
+        // Best practice: Manually handle all account states to avoid constraint conflicts
+        // The mint keypair is provided as a signer by the client
         let mint_account_info = ctx.accounts.mint.to_account_info();
         let mint_owner = mint_account_info.owner;
+        let mint_lamports = mint_account_info.lamports();
         
         // The mint authority is the mint_authority PDA
         let bump = ctx.bumps.mint_authority;
@@ -311,33 +302,80 @@ pub mod ascii {
         ];
         let signer = &[&mint_authority_seeds[..]];
 
-        // The mint account is created and initialized by the client (pre-instruction)
-        // This avoids Solana's AccountInfo staleness issues when doing create+initialize in the same CPI
-        // Verify the mint is owned by Token Program
-        require!(
-            mint_owner == &anchor_spl::token::ID,
-            AsciiError::InvalidMintAccount
-        );
-        msg!("Mint account verified (owned by Token Program)");
-
-        // Create Associated Token Account (ATA) for the payer
-        // Must be done after mint is initialized
-        anchor_spl::associated_token::create(
-            CpiContext::new(
-                ctx.accounts.associated_token_program.to_account_info(),
-                anchor_spl::associated_token::Create {
-                    payer: ctx.accounts.payer.to_account_info(),
-                    associated_token: ctx.accounts.token_account.to_account_info(),
-                    authority: ctx.accounts.payer.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                },
-            ),
-        )?;
-        msg!("Created associated token account");
+        // Note: mint is already verified as a signer by the Signer<'info> constraint
+        // Signer constraint only validates is_signer, not ownership, so it works even if account is initialized
+        // Check account state and handle accordingly
+        if mint_lamports == 0 {
+            // Account doesn't exist - create it first, then initialize
+            msg!("Mint account doesn't exist, creating...");
+            let rent = anchor_lang::solana_program::sysvar::rent::Rent::get()?;
+            let mint_rent = rent.minimum_balance(82); // Mint account size
+            
+            // Create the account as uninitialized (owned by System Program)
+            // It will be assigned to Token program by initialize_mint
+            // Use invoke_signed with the mint keypair as signer
+            anchor_lang::solana_program::program::invoke_signed(
+                &anchor_lang::solana_program::system_instruction::create_account(
+                    ctx.accounts.payer.key,
+                    mint_account_info.key,
+                    mint_rent,
+                    82,
+                    &system_program::ID, // Create as uninitialized, will be assigned to Token program by initialize_mint
+                ),
+                &[
+                    ctx.accounts.payer.to_account_info(),
+                    mint_account_info.clone(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+                &[], // No additional signers needed - mint is already a signer
+            )?;
+            
+            // Now initialize it
+            initialize_mint(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    InitializeMint {
+                        mint: mint_account_info,
+                        rent: ctx.accounts.rent.to_account_info(),
+                    },
+                    signer,
+                ),
+                0, // decimals (NFTs have 0 decimals)
+                &ctx.accounts.mint_authority.key(),
+                None, // freeze_authority (None for NFTs)
+            )?;
+            msg!("Mint account created and initialized");
+        } else if mint_owner == &system_program::ID {
+            // Account exists but is uninitialized (owned by System Program)
+            msg!("Mint account exists but is uninitialized, initializing...");
+            initialize_mint(
+                CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    InitializeMint {
+                        mint: mint_account_info,
+                        rent: ctx.accounts.rent.to_account_info(),
+                    },
+                    signer,
+                ),
+                0, // decimals (NFTs have 0 decimals)
+                &ctx.accounts.mint_authority.key(),
+                None, // freeze_authority (None for NFTs)
+            )?;
+            msg!("Mint account initialized");
+        } else if mint_owner == &anchor_spl::token::ID {
+            // Account is already initialized (owned by Token Program)
+            // This can happen if a previous transaction succeeded but this one is retrying
+            // Verify the mint is valid and proceed
+            msg!("Mint account already initialized, verifying and proceeding...");
+            // Note: We could add additional validation here if needed
+            // For now, we'll proceed with minting
+        } else {
+            // Account exists but is owned by an unexpected program
+            return Err(AsciiError::InvalidMintAccount.into());
+        }
 
         // Mint the token (1 token for NFT)
+
         mint_to(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -352,11 +390,9 @@ pub mod ascii {
         )?;
 
         // Create metadata using Metaplex CPI
-        // Note: verified must be false when calling via CPI - creator can verify later
-        // Setting verified: true requires the creator to sign, which isn't passed through CPI
         let creator = vec![mpl_token_metadata::types::Creator {
             address: ctx.accounts.payer.key(),
-            verified: false, // Must be false for CPI calls
+            verified: true,
             share: 100,
         }];
 
@@ -384,19 +420,8 @@ pub mod ascii {
         .is_mutable(true)
         .invoke_signed(&[mint_authority_seeds])?;
 
-        msg!("Metadata created, now verifying creator...");
-
-        // Verify the creator (payer) - this removes the "Unverified" warning
-        // The payer is a signer in this transaction, so they can self-verify
-        mpl_token_metadata::instructions::SignMetadataCpiBuilder::new(
-            &ctx.accounts.token_metadata_program.to_account_info(),
-        )
-        .metadata(&ctx.accounts.metadata.to_account_info())
-        .creator(&ctx.accounts.payer.to_account_info())
-        .invoke()?;
-
         msg!(
-            "Minted and verified ASCII NFT: {} ({}), URI: {}",
+            "Minted ASCII NFT: {} ({}), URI: {}",
             name,
             symbol,
             uri
@@ -414,6 +439,3 @@ pub mod ascii {
 
         Ok(())
     }
-}
-
-

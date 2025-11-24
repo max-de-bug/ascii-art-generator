@@ -10,6 +10,7 @@ import { mintAsciiArtNFTAnchor } from "./utils/mint-nft-anchor";
 import { useNetwork } from "./Providers/network-provider";
 import { getProgramId, getSolscanUrl } from "./utils/network-config";
 import { createImageBlob } from "./AsciiActions";
+import { requestIndexTransaction } from "../utils/api";
 
 export const MintButton = () => {
   const { asciiOutput, zoom } = useAsciiStore();
@@ -97,10 +98,10 @@ export const MintButton = () => {
         });
       } else {
         // Show error for other failures
-        toast.error(
-          error?.message || "Failed to mint ASCII art. Please try again.",
-          { id: "mint" }
-        );
+      toast.error(
+        error?.message || "Failed to mint ASCII art. Please try again.",
+        { id: "mint" }
+      );
       }
     } finally {
       setIsMinting(false);

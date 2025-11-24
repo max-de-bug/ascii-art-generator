@@ -32,4 +32,6 @@ pub enum AsciiError {
     InvalidTreasury,
     #[msg("Account already initialized")]
     AlreadyInitialized,
+    #[msg("Invalid mint account: must be uninitialized or owned by Token program")]
+    InvalidMintAccount,
 }

@@ -12,6 +12,8 @@ import {
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddress,
+  createInitializeMintInstruction,
+  MINT_SIZE,
 } from "@solana/spl-token";
 import { Program, AnchorProvider, Wallet, BN, Idl } from "@coral-xyz/anchor";
 // Import Lighthouse IPFS storage functions
@@ -358,31 +360,45 @@ export async function mintAsciiArtNFTAnchor({
     );
   }
 
-  // 11. Create the mint account as uninitialized (owned by System Program)
-  // This must be done before calling the instruction so the program can initialize it with Token program
-  const mintRent = await connection.getMinimumBalanceForRentExemption(82); // Mint account size
+  // 11. Get associated token account
+  const associatedTokenAccount = await getAssociatedTokenAddress(mint, wallet);
+
+  // 12. Derive metadata PDA
+  const [metadataPDA] = deriveMetadataPDA(mint);
+
+  // 13. Create pre-instructions to create and initialize the mint account
+  // This is done client-side to avoid Solana's AccountInfo staleness issues
+  // when doing create+initialize in the same program CPI
+  const rentExemptBalance = await connection.getMinimumBalanceForRentExemption(MINT_SIZE);
+  
+  // Instruction 1: Create the mint account (owned by Token Program)
   const createMintAccountIx = SystemProgram.createAccount({
     fromPubkey: wallet,
     newAccountPubkey: mint,
-    lamports: mintRent,
-    space: 82,
-    programId: SystemProgram.programId, // Uninitialized, will be assigned to Token program by initialize_mint
+    space: MINT_SIZE,
+    lamports: rentExemptBalance,
+    programId: TOKEN_PROGRAM_ID,
   });
 
-  // 12. Get associated token account
-  // Note: Anchor's `init` constraint with `associated_token` will automatically create this
-  const associatedTokenAccount = await getAssociatedTokenAddress(mint, wallet);
+  // Instruction 2: Initialize the mint (mint authority = PDA from program)
+  const initializeMintIx = createInitializeMintInstruction(
+    mint,           // mint account
+    0,              // decimals (0 for NFTs)
+    mintAuthority,  // mint authority (program's PDA)
+    null,           // freeze authority (none for NFTs)
+    TOKEN_PROGRAM_ID
+  );
 
-  // 13. Derive metadata PDA
-  const [metadataPDA] = deriveMetadataPDA(mint);
-
-  // 14. Build and send the transaction
-  // The mint account is created as uninitialized, then the program initializes it with Token program
-  // Anchor's `init` constraint with `associated_token` will automatically create the ATA
+  // 14. Build and send the transaction with pre-instructions
+  // The mint is created and initialized by the client, then the program:
+  //   - Verifies mint is owned by Token Program
+  //   - Creates ATA for the user
+  //   - Mints 1 token (NFT)
+  //   - Creates metadata via Metaplex
   const signature = await program.methods
     .mintAsciiNft(name, "ASCII", metadataUri, new BN(asciiArt.length))
     .accounts({
-      config: configPDA, // Required: Program config account
+      config: configPDA,
       payer: wallet,
       tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
       systemProgram: SystemProgram.programId,
@@ -391,12 +407,12 @@ export async function mintAsciiArtNFTAnchor({
       mint: mint,
       tokenAccount: associatedTokenAccount,
       metadata: metadataPDA,
-      feeVault: feeVault,
       tokenProgram: TOKEN_PROGRAM_ID,
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+      feeVault: feeVault,
     })
-    .preInstructions([createMintAccountIx])
-    .signers([mintKeypair])
+    .preInstructions([createMintAccountIx, initializeMintIx]) // Create & init mint first
+    .signers([mintKeypair]) // Mint keypair required for createAccount
     .rpc();
 
   // 14. Additional confirmation using modern API (optional, .rpc() already confirms)
