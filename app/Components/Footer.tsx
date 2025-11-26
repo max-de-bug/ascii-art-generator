@@ -10,7 +10,7 @@ export function Footer() {
             >
               About
             </h3>
-            <p className="text-sm text-muted-foreground transition-colors duration-300 hover:text-white">
+            <p className="text-sm text-muted-foreground transition-colors duration-300 hover:text-white cursor-pointer">
               Create stunning ASCII art from text and images with our advanced
               generator.
             </p>
@@ -22,7 +22,7 @@ export function Footer() {
             >
               Features
             </h3>
-            <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside ml-4">
+            <ul className="space-y-2 text-sm text-muted-foreground list-disc list-inside ml-4 cursor-pointer">
               <li className="transition-colors duration-300 hover:text-white">Text to ASCII conversion</li>
               <li className="transition-colors duration-300 hover:text-white">Image to ASCII conversion</li>
               <li className="transition-colors duration-300 hover:text-white">Adjustable density & size</li>
@@ -36,7 +36,7 @@ export function Footer() {
             >
               Usage
             </h3>
-            <p className="text-sm text-muted-foreground transition-colors duration-300 hover:text-white">
+            <p className="text-sm text-muted-foreground transition-colors duration-300 hover:text-white cursor-pointer">
               Enter text or upload an image, adjust settings, and generate
               beautiful ASCII art instantly.
             </p>
@@ -44,7 +44,10 @@ export function Footer() {
         </div>
         <div className="border-t border-border mt-8 pt-8">
           <p className="text-center text-sm text-muted-foreground">
+            
             © 2025 ASCII Art Generator. created by <a href="https://github.com/max-de-bug" className="text-primary hover:text-primary/80" target="_blank" rel="noopener noreferrer">Connor</a>
+            {' '}•{' '}
+            <a href="https://x.com/CryptoMax_07" className="text-primary hover:text-primary/80" target="_blank" rel="noopener noreferrer">X(Twitter)</a>
           </p>
         </div>
       </div>

@@ -10,7 +10,6 @@ import { mintAsciiArtNFTAnchor } from "./utils/mint-nft-anchor";
 import { useNetwork } from "./Providers/network-provider";
 import { getProgramId, getSolscanUrl } from "./utils/network-config";
 import { createImageBlob } from "./AsciiActions";
-import { requestIndexTransaction } from "../utils/api";
 
 export const MintButton = () => {
   const { asciiOutput, zoom } = useAsciiStore();

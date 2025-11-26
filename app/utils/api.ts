@@ -29,6 +29,22 @@ export interface UserLevel {
   updatedAt: string;
 }
 
+export interface Shard {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  earned: boolean;
+  canBeLost: boolean;
+}
+
+export interface UserShardStatus {
+  shards: Shard[];
+  totalShards: number;
+  hasZenith: boolean;
+  shardsNeededForZenith: number;
+}
+
 export interface UserProfile {
   walletAddress: string;
   nfts: NFT[];
@@ -69,11 +85,44 @@ export async function getUserProfile(walletAddress: string): Promise<UserProfile
 /**
  * Get user level
  */
-export async function getUserLevel(walletAddress: string): Promise<UserLevel> {
+export async function getUserLevel(walletAddress: string): Promise<UserLevel | null> {
   const response = await fetch(`${API_BASE_URL}/nft/user/${walletAddress}/level`);
   
   if (!response.ok) {
+    // If 404, user has no level
+    if (response.status === 404) {
+      return null;
+    }
     throw new Error(`Failed to fetch user level: ${response.statusText}`);
+  }
+
+  // Read response as text first to check if it's empty
+  // This prevents "Unexpected end of JSON input" error
+  const text = await response.text();
+  
+  // If response is empty or just "null", return null
+  if (!text || text.trim() === '' || text.trim() === 'null') {
+    return null;
+  }
+
+  // Parse JSON safely
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    // If JSON parsing fails, return null instead of throwing
+    console.warn('Failed to parse user level response, returning null:', error);
+    return null;
+  }
+}
+
+/**
+ * Get user shard status
+ */
+export async function getUserShardStatus(walletAddress: string): Promise<UserShardStatus> {
+  const response = await fetch(`${API_BASE_URL}/nft/user/${walletAddress}/shard-status`);
+  
+  if (!response.ok) {
+    throw new Error(`Failed to fetch shard status: ${response.statusText}`);
   }
 
   return response.json();

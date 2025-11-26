@@ -43,12 +43,14 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
   // Indexer configuration
   private readonly POLLING_INTERVAL_MS = 30000; // Poll every 30 seconds
-  private readonly BACKFILL_LIMIT = 100; // Process last 100 transactions on startup
-  private readonly POLL_LIMIT = 10; // Poll last 10 transactions
-  private readonly MAX_RETRIES = 3; // Max retry attempts for RPC calls
-  private readonly RETRY_DELAY_MS = 1000; // Initial retry delay (exponential backoff)
-  private readonly MAX_CONCURRENT_PROCESSING = 10; // Max concurrent transaction processing
+  private readonly BACKFILL_LIMIT = 20; // Process last 20 transactions on startup (reduced to avoid rate limits)
+  private readonly POLL_LIMIT = 5; // Poll last 5 transactions (reduced to avoid rate limits)
+  private readonly MAX_RETRIES = 5; // Max retry attempts for RPC calls (increased for 429 handling)
+  private readonly RETRY_DELAY_MS = 2000; // Initial retry delay (increased for rate limit handling)
+  private readonly MAX_CONCURRENT_PROCESSING = 3; // Max concurrent transaction processing (reduced to avoid rate limits)
   private readonly INITIALIZATION_DELAY_MS = 2000; // Delay before starting indexer
+  private readonly RATE_LIMIT_DELAY_MS = 100; // Delay between requests to avoid rate limits
+  private readonly BACKFILL_BATCH_DELAY_MS = 500; // Delay between backfill batches
 
   // Metrics
   private metrics = {
@@ -85,9 +87,13 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
     const programIdStr =
       this.configService.get<string>('solana.programId') ||
-      '56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt';
+      'DvGwWxoj4k1BQfRoEL18CNYnZ8XYZp1xYHSgBZdvaCKT'; // Updated to match frontend
 
     this.programId = new PublicKey(programIdStr);
+    
+    this.logger.log(
+      `[Indexer] Program ID configured: ${this.programId.toBase58()}`,
+    );
 
     this.logger.log(
       `Initialized indexer for program: ${this.programId.toBase58()}`,
@@ -112,7 +118,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   private async loadIdl(): Promise<void> {
     try {
       // Type assertion
-      this.eventParser.setIdl(idl as Idl);
+      this.eventParser.setIdl(idl as Idl, this.programId.toBase58());
       this.logger.log('Loaded IDL from import');
     } catch (error) {
       this.logger.error('Failed to load IDL', error);
@@ -139,16 +145,39 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
     try {
       // Subscribe to logs for our program
-      this.subscriptionId = this.connection.onLogs(
-        this.programId,
-        async (logs, context) => {
-          await this.processLogs(logs, context);
-        },
-        'confirmed',
-      );
-
       this.logger.log(
-        `Subscribed to program logs. Subscription ID: ${this.subscriptionId}`,
+        `[Indexer] Setting up WebSocket subscription for program: ${this.programId.toString()}`,
+      );
+      
+      try {
+        this.subscriptionId = this.connection.onLogs(
+          this.programId,
+          async (logs, context) => {
+            this.logger.log(
+              `[WebSocket] ✓ Received logs for program ${this.programId.toString()}, signature: ${logs?.signature || 'unknown'}, slot: ${context?.slot || 'unknown'}`,
+            );
+            await this.processLogs(logs, context);
+          },
+          'confirmed',
+        );
+
+        this.logger.log(
+          `[Indexer] ✓ Successfully subscribed to program logs for ${this.programId.toString()}. Subscription ID: ${this.subscriptionId}`,
+        );
+      } catch (subscriptionError: any) {
+        this.logger.error(
+          `[Indexer] ✗ Failed to create WebSocket subscription: ${subscriptionError.message}`,
+          subscriptionError.stack,
+        );
+        throw subscriptionError;
+      }
+
+      // Verify subscription is active
+      if (this.subscriptionId === null || this.subscriptionId === undefined) {
+        throw new Error('WebSocket subscription failed - subscriptionId is null');
+      }
+      this.logger.log(
+        `[Indexer] WebSocket subscription verified. ID: ${this.subscriptionId}`,
       );
 
       // Backfill: Process recent transactions
@@ -210,6 +239,10 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Received logs without signature', logs);
       return;
     }
+
+    this.logger.log(
+      `[Indexer] Processing transaction ${signature} (slot: ${context.slot})`,
+    );
 
     // Skip if currently processing (prevent race conditions)
     if (this.processingSignatures.has(signature)) {
@@ -291,8 +324,73 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       }
 
       // Try to parse MintEvent first
+      const txLogMessages = transaction.meta?.logMessages || [];
+      this.logger.log(
+        `[Indexer] Attempting to parse MintEvent from transaction ${signature}. Log count: ${txLogMessages.length}`,
+      );
+      
+      // Log first few logs to see what we're working with
+      if (txLogMessages.length > 0) {
+        const sampleLogs = txLogMessages.slice(0, 10).join(' | ');
+        this.logger.debug(
+          `[Indexer] Sample logs from transaction: ${sampleLogs.substring(0, 500)}`,
+        );
+      }
+      
       const mintEvent = this.eventParser.parseMintEvent(transaction);
       if (mintEvent) {
+        this.logger.log(
+          `[Indexer] ✓ Found MintEvent: ${mintEvent.name} (${mintEvent.mint}) minted by ${mintEvent.minter}`,
+        );
+        
+        // Verify the NFT is still owned by the minter before saving
+        // This prevents indexing NFTs that were immediately burned/transferred
+        // For newly minted NFTs (within 5 minutes), retry ownership check as token account may not be immediately available
+        const transactionAge = transaction.blockTime
+          ? Date.now() / 1000 - transaction.blockTime
+          : 0;
+        const isRecentMint = transactionAge < 300; // 5 minutes
+        
+        let isOwned = false;
+        if (isRecentMint) {
+          // Retry ownership check for recent mints (token account propagation delay)
+          this.logger.debug(
+            `[Indexer] Recent mint detected (${Math.round(transactionAge)}s old), retrying ownership check...`,
+          );
+          for (let attempt = 0; attempt < 3; attempt++) {
+            isOwned = await this.nftStorage.isNftOwnedByWallet(
+              mintEvent.mint,
+              mintEvent.minter,
+            );
+            if (isOwned) {
+              this.logger.debug(
+                `[Indexer] Ownership verified on attempt ${attempt + 1} for NFT ${mintEvent.mint}`,
+              );
+              break;
+            }
+            if (attempt < 2) {
+              // Wait 2 seconds before retry (except on last attempt)
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+              this.logger.debug(
+                `[Indexer] Ownership check failed, retrying... (attempt ${attempt + 2}/3)`,
+              );
+            }
+          }
+        } else {
+          // For older transactions, check once
+          isOwned = await this.nftStorage.isNftOwnedByWallet(
+            mintEvent.mint,
+            mintEvent.minter,
+          );
+        }
+
+        if (!isOwned) {
+          this.logger.warn(
+            `[Indexer] ✗ Skipping NFT ${mintEvent.mint} - no longer owned by minter ${mintEvent.minter} (likely burned/transferred)`,
+          );
+          return;
+        }
+
         // Create NFT entity (id, createdAt, updatedAt will be auto-generated by TypeORM)
         const nft: Partial<NFT> = {
           mint: mintEvent.mint,
@@ -306,12 +404,29 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
           timestamp: mintEvent.timestamp,
         };
 
-        // Save NFT
-        await this.nftStorage.saveNft(nft);
-
-        this.logger.log(
-          `Indexed NFT: ${mintEvent.name} (${mintEvent.mint}) minted by ${mintEvent.minter}`,
-        );
+        // Save NFT (will check ownership and remove if not owned)
+        try {
+          this.logger.log(
+            `[Indexer] Saving NFT to database: ${mintEvent.name} (${mintEvent.mint}) for minter: ${mintEvent.minter}`,
+          );
+          const savedNft = await this.nftStorage.saveNft(nft);
+          this.logger.log(
+            `[Indexer] ✓ Successfully indexed NFT: ${mintEvent.name} (${mintEvent.mint}) minted by ${mintEvent.minter}. Database ID: ${savedNft.id}`,
+          );
+        } catch (error: any) {
+          // If saveNft throws "NFT no longer owned", that's expected - just skip
+          if (error.message?.includes('no longer owned')) {
+            this.logger.debug(
+              `[Indexer] Skipped indexing NFT ${mintEvent.mint} - was removed from database (no longer owned)`,
+            );
+          } else {
+            this.logger.error(
+              `[Indexer] ✗ Error saving NFT ${mintEvent.mint} to database: ${error.message}`,
+              error.stack,
+            );
+            throw error; // Re-throw other errors
+          }
+        }
         return;
       }
 
@@ -338,9 +453,31 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       }
 
       // No recognized event found, skip
-      this.logger.debug(
-        `No MintEvent or BuybackEvent found in transaction ${signature}`,
+      // Log transaction details for debugging if it's from our program
+      const accountKeys = transaction.transaction.message.accountKeys || [];
+      const logMessages = transaction.meta?.logMessages || [];
+      const hasProgramAccount = accountKeys.some(
+        (acc) => acc.pubkey?.toString() === this.programId.toString(),
       );
+      
+      if (hasProgramAccount) {
+        // Check if transaction actually invoked our program
+        const programLogs = logMessages.filter((log) =>
+          log.includes(this.programId.toString()),
+        );
+        
+        if (programLogs.length > 0) {
+          this.logger.debug(
+            `Transaction ${signature} invoked our program but no MintEvent or BuybackEvent found. Log count: ${logMessages.length}, Program logs: ${programLogs.length}`,
+          );
+          // Log first few program logs for debugging
+          if (programLogs.length > 0) {
+            this.logger.debug(
+              `Program logs: ${programLogs.slice(0, 5).join(' | ')}`,
+            );
+          }
+        }
+      }
     } catch (error) {
       this.logger.error(`Error processing transaction ${signature}`, error);
     }
@@ -366,63 +503,77 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
       let processed = 0;
       let skipped = 0;
-      for (const sigInfo of signatures) {
-        // Check in-memory cache first
-        if (this.processedSignatures.has(sigInfo.signature)) {
-          skipped++;
-          continue;
-        }
-
-        // Check database to avoid reprocessing (important after restarts)
-        const isProcessed = await this.nftStorage.isTransactionProcessed(
-          sigInfo.signature,
-        );
-        if (isProcessed) {
-          this.addProcessedSignature(sigInfo.signature); // Add to cache
-          skipped++;
-          continue;
-        }
-
-        // Check concurrency limit
-        if (this.processingSignatures.size >= this.MAX_CONCURRENT_PROCESSING) {
-          await new Promise((resolve) => setTimeout(resolve, 500)); // Wait before continuing
-          continue;
-        }
-
-        if (this.processingSignatures.has(sigInfo.signature)) {
-          continue;
-        }
-
-        this.processingSignatures.add(sigInfo.signature);
-
-        try {
-          const transaction = await this.retryRpcCall(
-            () =>
-              this.connection.getParsedTransaction(sigInfo.signature, {
-                maxSupportedTransactionVersion: 0,
-                commitment: 'confirmed',
-              }),
-            `getParsedTransaction(backfill ${sigInfo.signature})`,
-          );
-
-          if (transaction) {
-            await this.processTransaction(
-              transaction,
-              sigInfo.signature,
-              sigInfo.slot,
-            );
-            this.addProcessedSignature(sigInfo.signature);
-            this.metrics.totalProcessed++;
-            processed++;
+      
+      // Process in smaller batches with delays to avoid rate limits
+      const batchSize = 5;
+      for (let i = 0; i < signatures.length; i += batchSize) {
+        const batch = signatures.slice(i, i + batchSize);
+        
+        for (const sigInfo of batch) {
+          // Check in-memory cache first
+          if (this.processedSignatures.has(sigInfo.signature)) {
+            skipped++;
+            continue;
           }
-        } catch (error) {
-          this.metrics.totalErrors++;
-          this.logger.warn(
-            `Error backfilling transaction ${sigInfo.signature}`,
-            error,
+
+          // Check database to avoid reprocessing (important after restarts)
+          const isProcessed = await this.nftStorage.isTransactionProcessed(
+            sigInfo.signature,
           );
-        } finally {
-          this.processingSignatures.delete(sigInfo.signature);
+          if (isProcessed) {
+            this.addProcessedSignature(sigInfo.signature); // Add to cache
+            skipped++;
+            continue;
+          }
+
+          // Check concurrency limit
+          if (this.processingSignatures.size >= this.MAX_CONCURRENT_PROCESSING) {
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Wait before continuing
+            continue;
+          }
+
+          if (this.processingSignatures.has(sigInfo.signature)) {
+            continue;
+          }
+
+          this.processingSignatures.add(sigInfo.signature);
+
+          try {
+            const transaction = await this.retryRpcCall(
+              () =>
+                this.connection.getParsedTransaction(sigInfo.signature, {
+                  maxSupportedTransactionVersion: 0,
+                  commitment: 'confirmed',
+                }),
+              `getParsedTransaction(backfill ${sigInfo.signature})`,
+            );
+
+            if (transaction) {
+              await this.processTransaction(
+                transaction,
+                sigInfo.signature,
+                sigInfo.slot,
+              );
+              this.addProcessedSignature(sigInfo.signature);
+              this.metrics.totalProcessed++;
+              processed++;
+            }
+          } catch (error) {
+            this.metrics.totalErrors++;
+            this.logger.warn(
+              `Error backfilling transaction ${sigInfo.signature}`,
+              error,
+            );
+          } finally {
+            this.processingSignatures.delete(sigInfo.signature);
+          }
+        }
+
+        // Add delay between batches to avoid rate limits (except for last batch)
+        if (i + batchSize < signatures.length) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, this.BACKFILL_BATCH_DELAY_MS),
+          );
         }
       }
 
@@ -633,6 +784,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Retry RPC call with exponential backoff
+   * Handles 429 rate limit errors with longer delays
    */
   private async retryRpcCall<T>(
     fn: () => Promise<T>,
@@ -640,8 +792,19 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
     retries: number = 0,
   ): Promise<T> {
     try {
+      // Add small delay before each request to avoid rate limits
+      if (retries === 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.RATE_LIMIT_DELAY_MS));
+      }
       return await fn();
-    } catch (error) {
+    } catch (error: any) {
+      // Check if it's a rate limit error (429)
+      const isRateLimitError =
+        error?.message?.includes('429') ||
+        error?.message?.includes('Too Many Requests') ||
+        error?.statusCode === 429 ||
+        error?.code === 429;
+
       if (retries >= this.MAX_RETRIES) {
         this.logger.error(
           `Max retries (${this.MAX_RETRIES}) exceeded for ${operation}`,
@@ -650,11 +813,15 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
         throw error;
       }
 
-      const delay = this.RETRY_DELAY_MS * Math.pow(2, retries); // Exponential backoff
+      // Use longer delay for rate limit errors
+      const baseDelay = isRateLimitError
+        ? this.RETRY_DELAY_MS * 5 // 10 seconds for rate limits
+        : this.RETRY_DELAY_MS;
+      const delay = baseDelay * Math.pow(2, retries); // Exponential backoff
+      
       this.metrics.totalRetries++;
       this.logger.warn(
-        `RPC call failed for ${operation}, retrying in ${delay}ms (attempt ${retries + 1}/${this.MAX_RETRIES})`,
-        error,
+        `RPC call failed for ${operation}${isRateLimitError ? ' (rate limited)' : ''}, retrying in ${delay}ms (attempt ${retries + 1}/${this.MAX_RETRIES})`,
       );
 
       await new Promise((resolve) => setTimeout(resolve, delay));

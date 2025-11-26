@@ -29,17 +29,28 @@ export class NftController {
     return {
       walletAddress,
       nfts,
-      userLevel,
+      userLevel, // Can be null if user has no NFTs
       totalNfts: nfts.length,
     };
   }
 
   /**
    * Get user level
+   * Returns null if user has no NFTs (level was removed)
    */
   @Get('user/:walletAddress/level')
   async getUserLevel(@Param('walletAddress') walletAddress: string) {
-    return this.nftStorage.getUserLevel(walletAddress);
+    const level = await this.nftStorage.getUserLevel(walletAddress);
+    // Return null if user has no NFTs (level was removed)
+    return level;
+  }
+
+  /**
+   * Get user shard status
+   */
+  @Get('user/:walletAddress/shard-status')
+  async getUserShardStatus(@Param('walletAddress') walletAddress: string) {
+    return this.nftStorage.getUserShardStatus(walletAddress);
   }
 
   /**

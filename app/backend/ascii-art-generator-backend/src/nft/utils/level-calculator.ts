@@ -1,143 +1,283 @@
 /**
- * Level Calculator Utility
+ * ZENITH Shard System
  *
- * Calculates user levels based on NFT mint count
- * Separated from entity for better code organization
+ * A shard-based progression system inspired by competitive achievement systems.
+ * Users earn shards by completing specific achievements, and need 6 shards to attain ZENITH.
  */
 
+import { UserLevel } from "../entities/user-level.entity";
+
 /**
- * Level configuration
- * Defines mint requirements for each level
+ * Shard types and their requirements
+ * Each shard represents a different achievement path
  */
-export const LEVEL_CONFIG = [
-  { level: 1, mintsRequired: 0 }, // Level 1: 0-4 mints
-  { level: 2, mintsRequired: 5 }, // Level 2: 5-9 mints
-  { level: 3, mintsRequired: 10 }, // Level 3: 10-19 mints
-  { level: 4, mintsRequired: 20 }, // Level 4: 20-39 mints
-  { level: 5, mintsRequired: 40 }, // Level 5: 40-79 mints
-  { level: 6, mintsRequired: 80 }, // Level 6: 80-149 mints
-  { level: 7, mintsRequired: 150 }, // Level 7: 150-249 mints
-  { level: 8, mintsRequired: 250 }, // Level 8: 250-499 mints
-  { level: 9, mintsRequired: 500 }, // Level 9: 500-999 mints
-  { level: 10, mintsRequired: 1000 }, // Level 10: 1000+ mints (max level)
+export const SHARD_CONFIG = [
+  {
+    id: 'quartz',
+    name: 'Quartz Shard',
+    emoji: '⚪',
+    description: 'Mint 50 ASCII art NFTs',
+    requirement: {
+      type: 'mint_count',
+      value: 50,
+    },
+    canBeLost: false,
+    lossCondition: null,
+  },
+  {
+    id: 'amethyst',
+    name: 'Amethyst Shard',
+    emoji: '🟣',
+    description: 'Maintain a collection of at least 10 NFTs',
+    requirement: {
+      type: 'collection_size',
+      value: 10,
+    },
+    canBeLost: true,
+    lossCondition: {
+      type: 'collection_size',
+      value: 10,
+      operator: 'below', // Lost if collection drops below 10
+    },
+  },
+  {
+    id: 'ruby',
+    name: 'Ruby Shard',
+    emoji: '🔴',
+    description: 'Mint at least 5 NFTs in the last 30 days',
+    requirement: {
+      type: 'recent_mints',
+      value: 5,
+      days: 30,
+    },
+    canBeLost: true,
+    lossCondition: {
+      type: 'recent_mints',
+      value: 5,
+      days: 30,
+      operator: 'below', // Lost if recent mints drop below 5
+    },
+  },
+  {
+    id: 'sapphire',
+    name: 'Sapphire Shard',
+    emoji: '🔵',
+    description: 'Mint 100 total NFTs',
+    requirement: {
+      type: 'mint_count',
+      value: 100,
+    },
+    canBeLost: false,
+    lossCondition: null,
+  },
+  {
+    id: 'emerald',
+    name: 'Emerald Shard',
+    emoji: '🟢',
+    description: 'Mint 25 NFTs with unique ASCII art (no duplicates)',
+    requirement: {
+      type: 'unique_mints',
+      value: 25,
+    },
+    canBeLost: false,
+    lossCondition: null,
+  },
+  {
+    id: 'obsidian',
+    name: 'Obsidian Shard',
+    emoji: '⚫',
+    description: 'Mystery - Rare achievement',
+    requirement: {
+      type: 'mystery',
+      value: null, // Hidden criteria
+    },
+    canBeLost: false,
+    lossCondition: null,
+  },
 ] as const;
 
 /**
- * Result of level calculation
+ * Shard requirement types
  */
-export interface LevelCalculationResult {
-  /** Current level (1-10) */
-  level: number;
-  /** Experience points in current level */
-  experience: number;
-  /** Mints needed to reach next level */
-  nextLevelMints: number;
+export type ShardRequirementType =
+  | 'mint_count'
+  | 'collection_size'
+  | 'recent_mints'
+  | 'unique_mints'
+  | 'special_event'
+  | 'mystery';
+
+/**
+ * Shard data structure
+ */
+export interface Shard {
+  id: string;
+  name: string;
+  emoji: string;
+  description: string;
+  earned: boolean;
+  earnedAt?: Date;
+  canBeLost: boolean;
 }
 
 /**
- * Calculate user level based on total mint count
- *
- * @param mintCount - Total number of NFTs minted by the user
- * @returns Level calculation result with level, experience, and next level requirements
- *
- * @example
- * ```typescript
- * const result = calculateLevel(15);
- * // Returns: { level: 3, experience: 5, nextLevelMints: 5 }
- * // User is level 3 (10-19 mints), has 5 experience in this level, needs 5 more mints to reach level 4
- * ```
+ * User shard status
  */
-export function calculateLevel(mintCount: number): LevelCalculationResult {
-  // Iterate from highest level down to find appropriate level
-  for (let i = LEVEL_CONFIG.length - 1; i >= 0; i--) {
-    if (mintCount >= LEVEL_CONFIG[i].mintsRequired) {
-      const currentLevelConfig = LEVEL_CONFIG[i];
-      const nextLevelConfig = LEVEL_CONFIG[i + 1];
-      const isMaxLevel = i === LEVEL_CONFIG.length - 1;
+export interface UserShardStatus {
+  shards: Shard[];
+  totalShards: number;
+  hasZenith: boolean;
+  shardsNeededForZenith: number;
+}
 
-      if (isMaxLevel) {
-        // Max level reached - no next level
-        return {
-          level: currentLevelConfig.level,
-          experience: mintCount - currentLevelConfig.mintsRequired,
-          nextLevelMints: 0, // No next level
-        };
+/**
+ * User statistics for shard eligibility checking
+ */
+export interface UserStats {
+  totalMints: number;
+  collectionSize: number;
+  recentMints: number; // Mints in last 30 days
+  uniqueMints: number; // NFTs with unique ASCII art
+  mintHistory: Date[]; // Dates of all mints
+}
+
+/**
+ * Check if user is eligible for a specific shard
+ */
+export function checkShardEligibility(
+  shardId: string,
+  userStats: UserStats,
+): boolean {
+  const shard = SHARD_CONFIG.find((s) => s.id === shardId);
+  if (!shard) return false;
+
+  const req = shard.requirement;
+
+  switch (req.type) {
+    case 'mint_count':
+      return userStats.totalMints >= req.value;
+
+    case 'collection_size':
+      return userStats.collectionSize >= req.value;
+
+    case 'recent_mints':
+      return userStats.recentMints >= req.value;
+
+    case 'unique_mints':
+      return userStats.uniqueMints >= req.value;
+    default:
+      return false;
+  }
+}
+
+/**
+ * Check if a shard should be lost based on loss conditions
+ */
+export function checkShardLoss(
+  shardId: string,
+  userStats: UserStats,
+): boolean {
+  const shard = SHARD_CONFIG.find((s) => s.id === shardId);
+  if (!shard || !shard.canBeLost || !shard.lossCondition) return false;
+
+  const condition = shard.lossCondition;
+
+  switch (condition.type) {
+    case 'collection_size':
+      if (condition.operator === 'below') {
+        return userStats.collectionSize < condition.value;
       }
+      break;
 
-      // Calculate experience within current level
-      const experience = mintCount - currentLevelConfig.mintsRequired;
+    case 'recent_mints':
+      if (condition.operator === 'below') {
+        return userStats.recentMints < condition.value;
+      }
+      break;
 
-      // Calculate mints needed for next level
-      const nextLevelMints = nextLevelConfig.mintsRequired - mintCount;
-
-      return {
-        level: currentLevelConfig.level,
-        experience,
-        nextLevelMints,
-      };
-    }
+    default:
+      return false;
   }
 
-  // Default: Level 1 (0-4 mints)
+  return false;
+}
+
+/**
+ * Calculate user's shard status
+ */
+export function calculateShardStatus(
+  userStats: UserStats,
+  earnedShards: string[] = [], // Array of shard IDs user has earned
+): UserShardStatus {
+  const shards: Shard[] = SHARD_CONFIG.map((config) => {
+    const isEarned = earnedShards.includes(config.id);
+
+    // Check if shard should be lost
+    let shouldHaveShard = isEarned;
+    if (isEarned && config.canBeLost) {
+      shouldHaveShard = !checkShardLoss(config.id, userStats);
+    }
+
+    // Check if user is eligible for shard (if not already earned)
+    const isEligible = shouldHaveShard || checkShardEligibility(config.id, userStats);
+
+    return {
+      id: config.id,
+      name: config.name,
+      emoji: config.emoji,
+      description: config.description,
+      earned: isEligible && shouldHaveShard,
+      canBeLost: config.canBeLost,
+    };
+  });
+
+  const totalShards = shards.filter((s) => s.earned).length;
+  const requiredShards = 6;
+  const hasZenith = totalShards >= requiredShards;
+  const shardsNeededForZenith = Math.max(0, requiredShards - totalShards);
+
   return {
-    level: 1,
-    experience: mintCount,
-    nextLevelMints: LEVEL_CONFIG[1].mintsRequired - mintCount, // 5 - mintCount
+    shards,
+    totalShards,
+    hasZenith,
+    shardsNeededForZenith,
   };
 }
 
 /**
- * Get level configuration by level number
- *
- * @param level - Level number (1-10)
- * @returns Level configuration or null if level doesn't exist
+ * Get shard configuration by ID
  */
-export function getLevelConfig(
-  level: number,
-): (typeof LEVEL_CONFIG)[number] | null {
-  return LEVEL_CONFIG.find((config) => config.level === level) || null;
+export function getShardConfig(shardId: string) {
+  return SHARD_CONFIG.find((s) => s.id === shardId);
 }
 
 /**
- * Get maximum level
- *
- * @returns Maximum achievable level
+ * Get all shard configurations
  */
-export function getMaxLevel(): number {
-  return LEVEL_CONFIG[LEVEL_CONFIG.length - 1].level;
+export function getAllShardConfigs() {
+  return SHARD_CONFIG;
 }
 
 /**
- * Check if user leveled up
- *
- * @param oldMintCount - Previous mint count
- * @param newMintCount - New mint count
- * @returns True if user leveled up, false otherwise
+ * Check if user has ZENITH status
  */
-export function hasLeveledUp(
-  oldMintCount: number,
-  newMintCount: number,
-): boolean {
-  const oldLevel = calculateLevel(oldMintCount).level;
-  const newLevel = calculateLevel(newMintCount).level;
-  return newLevel > oldLevel;
+export function hasZenith(status: UserShardStatus): boolean {
+  return status.hasZenith;
 }
 
-/**
- * Get progress percentage to next level
- *
- * @param mintCount - Current mint count
- * @returns Progress percentage (0-100)
- */
-export function getLevelProgress(mintCount: number): number {
-  const result = calculateLevel(mintCount);
 
-  if (result.nextLevelMints === 0) {
-    return 100; // Max level reached
-  }
-
-  const totalMintsForLevel = result.experience + result.nextLevelMints;
-  const progress = (result.experience / totalMintsForLevel) * 100;
-
-  return Math.min(100, Math.max(0, progress));
+export function calculateLevel(mintCount: number): UserLevel {
+  // Return minimal data - level progression is now handled by shards
+  // This is kept only for database schema compatibility
+  return {
+    walletAddress: '',
+    totalMints: mintCount,
+    level: 1,
+    experience: mintCount,
+    nextLevelMints: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    version: 1,
+  };
 }
+

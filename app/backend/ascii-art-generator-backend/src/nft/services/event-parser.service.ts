@@ -32,15 +32,17 @@ export class EventParserService {
   private readonly logger = new Logger(EventParserService.name);
   private coder: BorshCoder | null = null;
   private idl: Idl | null = null;
+  private programId: string | null = null;
 
   /**
    * Set the IDL for event parsing
    * This should be called with your program's IDL after service initialization
    */
-  setIdl(idl: Idl): void {
+  setIdl(idl: Idl, programId?: string): void {
     this.idl = idl;
     this.coder = new BorshCoder(idl);
-    this.logger.log('Anchor event parser initialized with IDL');
+    this.programId = programId || null;
+    this.logger.log(`[EventParser] Anchor event parser initialized with IDL${programId ? ` for program: ${programId}` : ''}`);
   }
 
   /**
@@ -50,36 +52,93 @@ export class EventParserService {
    * "Program data: <base64_encoded_event_data>"
    */
   parseMintEvent(transaction: ParsedTransactionWithMeta): MintEvent | null {
+    const logMessages = transaction.meta?.logMessages || [];
+    this.logger.debug(
+      `[EventParser] Parsing MintEvent from transaction with ${logMessages.length} log messages`,
+    );
+
     if (!this.coder) {
       this.logger.warn(
-        'Event parser not initialized with IDL. Call setIdl() first.',
+        '[EventParser] Event parser not initialized with IDL. Call setIdl() first. Using fallback parser.',
       );
       return this.parseMintEventFallback(transaction);
     }
 
     try {
-      const logMessages = transaction.meta?.logMessages || [];
-
       // Anchor events are in logs with format: "Program data: <base64_data>"
-      for (const log of logMessages) {
-        if (log.includes('Program data:')) {
+      // We need to find "Program data:" logs that come from our program
+      // In Solana logs, program-specific logs appear after "Program <program_id> invoke"
+      let isOurProgram = false;
+      for (let i = 0; i < logMessages.length; i++) {
+        const log = logMessages[i];
+        
+        // Check if this log indicates our program was invoked
+        if (this.programId && log.includes(`Program ${this.programId} invoke`)) {
+          isOurProgram = true;
+          this.logger.debug(`[EventParser] Found our program invocation at log index ${i}`);
+        }
+        
+        // Reset flag when program returns
+        if (this.programId && log.includes(`Program ${this.programId} success`)) {
+          isOurProgram = false;
+        }
+        
+        // Only process "Program data:" logs that come from our program
+        if (log.includes('Program data:') && (isOurProgram || !this.programId)) {
+          this.logger.debug(`[EventParser] Found "Program data:" log at index ${i}${isOurProgram ? ' (from our program)' : ''}, attempting to decode`);
           try {
             // Extract base64 encoded data
             const match = log.match(/Program data: (.+)/);
-            if (!match) continue;
+            if (!match) {
+              this.logger.debug(`[EventParser] No match found for "Program data:" pattern`);
+              continue;
+            }
 
             const encodedData = match[1];
+            this.logger.debug(`[EventParser] Extracted base64 data (first 100 chars): ${encodedData.substring(0, 100)}...`);
 
             // Decode base64 to buffer
-            const data = Buffer.from(encodedData, 'base64');
+            let data: Buffer;
+            try {
+              data = Buffer.from(encodedData, 'base64');
+              this.logger.debug(`[EventParser] Decoded buffer length: ${data.length} bytes`);
+            } catch (base64Error: any) {
+              this.logger.warn(`[EventParser] Failed to decode base64: ${base64Error.message}`);
+              continue;
+            }
 
             // Use Anchor's event decoder
-            const event = this.coder.events.decode(data.toString('hex'));
+            // Anchor events are encoded with discriminator + data
+            // The decoder expects the full buffer including discriminator
+            let event: any;
+            try {
+              // Try decoding with hex string (most common format)
+              event = this.coder.events.decode(data.toString('hex'));
+            } catch (hexError: any) {
+              this.logger.debug(`[EventParser] Hex decode failed: ${hexError.message}`);
+              try {
+                // Try with base64 string directly
+                event = this.coder.events.decode(encodedData);
+              } catch (base64DecodeError: any) {
+                this.logger.warn(
+                  `[EventParser] Both hex and base64 decode failed. Hex: ${hexError.message}, Base64: ${base64DecodeError.message}`,
+                );
+                // Log the first few bytes for debugging
+                this.logger.debug(`[EventParser] First 20 bytes (hex): ${data.slice(0, 20).toString('hex')}`);
+                continue;
+              }
+            }
 
-            if (!event) continue;
+            if (!event) {
+              this.logger.debug(`[EventParser] Decoder returned null/undefined`);
+              continue;
+            }
+
+            this.logger.debug(`[EventParser] Decoded event name: ${event.name}`);
 
             // Check if this is a MintEvent
             if (event.name === 'MintEvent' || event.name === 'mintEvent') {
+              this.logger.log(`[EventParser] ✓ Successfully decoded MintEvent using Anchor decoder`);
               const eventData = event.data;
 
               return {
@@ -92,10 +151,17 @@ export class EventParserService {
                   ? eventData.timestamp.toNumber()
                   : eventData.timestamp,
               };
+            } else {
+              this.logger.debug(`[EventParser] Decoded event is not MintEvent: ${event.name}`);
             }
-          } catch (error) {
+          } catch (error: any) {
             // Not an event we recognize, continue
-            this.logger.debug(`Could not decode event from log: ${log}`, error);
+            this.logger.warn(
+              `[EventParser] Could not decode event from log: ${log.substring(0, 200)}... Error: ${error.message || error}`,
+            );
+            if (error.stack) {
+              this.logger.debug(`[EventParser] Error stack: ${error.stack}`);
+            }
             continue;
           }
         }
@@ -135,12 +201,23 @@ export class EventParserService {
     // - "Program data: <base58_data>"
     // - Or in instruction data logs
 
+    this.logger.debug(
+      `[EventParser] Using fallback parser. Checking ${logMessages.length} logs for mint-related messages`,
+    );
+
     for (const log of logMessages) {
-      // Look for mint-related logs
-      if (log.includes('Minted ASCII NFT') || log.includes('mint_ascii_nft')) {
+      // Look for mint-related logs - the actual log says "Minted and verified ASCII NFT"
+      if (
+        log.includes('Minted ASCII NFT') ||
+        log.includes('Minted and verified ASCII NFT') ||
+        log.includes('mint_ascii_nft')
+      ) {
+        this.logger.debug(`[EventParser] Found mint-related log in fallback: ${log}`);
         // Try to extract information from log message
-        // Log format: "Minted ASCII NFT: {name} ({symbol}), URI: {uri}"
-        const nameMatch = log.match(/Minted ASCII NFT: ([^(]+)/);
+        // Log format: "Minted and verified ASCII NFT: {name} ({symbol}), URI: {uri}"
+        const nameMatch =
+          log.match(/Minted (?:and verified )?ASCII NFT: ([^(]+)/) ||
+          log.match(/Minted ASCII NFT: ([^(]+)/);
         const symbolMatch = log.match(/\(([^)]+)\)/);
         const uriMatch = log.match(/URI: (.+)/);
 
@@ -192,6 +269,10 @@ export class EventParserService {
             ? transaction.blockTime
             : Math.floor(Date.now() / 1000);
 
+          this.logger.log(
+            `[EventParser] ✓ Parsed MintEvent from logs: ${name} (${mint}) minted by ${minter}`,
+          );
+
           return {
             minter,
             mint,
@@ -200,6 +281,10 @@ export class EventParserService {
             uri,
             timestamp,
           };
+        } else {
+          this.logger.warn(
+            `[EventParser] Could not extract all required fields. minter: ${minter}, mint: ${mint}, nameMatch: ${!!nameMatch}`,
+          );
         }
       }
     }

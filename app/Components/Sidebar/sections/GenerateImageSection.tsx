@@ -5,6 +5,8 @@ import { useAsciiStore } from "../../store/ascii-store";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { generateAsciiFromImage } from "../../utils/ascii-converter";
+import { Button } from "@/components/ui/button";
+import { TrashIcon } from "lucide-react";
 export const GenerateImageSection = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -132,7 +134,7 @@ export const GenerateImageSection = () => {
             type="file"
             accept="image/*"
             onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-            className="bg-input border-border text-foreground text-xs"
+            className="bg-input border-border text-foreground text-xs cursor-pointer file:hover:bg-accent file:transition-colors file:duration-200 hover:border-primary/50 transition-colors"
           />
           {imageFile && (
             <div className="mt-2 space-y-2">
@@ -146,6 +148,19 @@ export const GenerateImageSection = () => {
                   className="w-full rounded border border-border object-contain max-h-32"
                 />
               )}
+              <Button
+                onClick={() => {
+                  setImageFile(null);
+                  setAsciiOutput(""); // Clear ASCII output from canvas
+                }}
+                className="w-full bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+                style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
+              >
+                <span className="flex items-center gap-2">
+                  <TrashIcon className="size-4" />
+                  Remove Image
+                </span>
+              </Button>
             </div>
           )}
         </div>

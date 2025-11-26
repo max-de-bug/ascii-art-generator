@@ -16,6 +16,37 @@ const nextConfig: NextConfig = {
     'arbundles',
   ],
   
+  // Allow images from IPFS gateways and other external sources
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'gateway.lighthouse.storage',
+        pathname: '/ipfs/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'ipfs.io',
+        pathname: '/ipfs/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cloudflare-ipfs.com',
+        pathname: '/ipfs/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'gateway.pinata.cloud',
+        pathname: '/ipfs/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'dweb.link',
+        pathname: '/ipfs/**',
+      },
+    ],
+  },
+  
   // Turbopack configuration
   // Alias Node.js built-in modules to empty module for client bundles
   // This prevents Turbopack from trying to bundle Node.js-only modules

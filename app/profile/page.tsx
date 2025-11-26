@@ -6,7 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Wallet} from "lucide-react";
-import { getUserProfile, type UserProfile } from "../utils/api";
+import { getUserProfile, getUserShardStatus, getUserLevel, type UserProfile, type UserShardStatus, type UserLevel } from "../utils/api";
 import { UserLevelCard } from "../Components/UserLevelCard";
 import { NFTCollection } from "../Components/NFTCollection";
 import { WalletAddressCard } from "../Components/walletAddressCard";
@@ -20,22 +20,54 @@ export default function ProfilePage() {
     setMounted(true);
   }, []);
 
-  // Use TanStack Query for data fetching
+  // Fetch user profile for NFTs
   const {
     data: profile,
-    isLoading,
-    error,
-    refetch,
+    isLoading: isLoadingProfile,
+    error: profileError,
   } = useQuery<UserProfile>({
     queryKey: ["userProfile", publicKey?.toString()],
     queryFn: () => getUserProfile(publicKey!.toString()),
     enabled: !!connected && !!publicKey && mounted,
-    staleTime: 30 * 1000, // Consider data fresh for 30 seconds
-    refetchInterval: 60 * 1000, // Refetch every minute to catch new mints
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+
+  // Fetch user shard status
+  const {
+    data: shardStatus,
+    isLoading: isLoadingShards,
+    error: shardError,
+    refetch: refetchShards,
+  } = useQuery<UserShardStatus>({
+    queryKey: ["userShardStatus", publicKey?.toString()],
+    queryFn: () => getUserShardStatus(publicKey!.toString()),
+    enabled: !!connected && !!publicKey && mounted,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+  });
+
+  // Fetch user level
+  const {
+    data: userLevel,
+    isLoading: isLoadingLevel,
+    error: levelError,
+    refetch: refetchLevel,
+  } = useQuery<UserLevel>({
+    queryKey: ["userLevel", publicKey?.toString()],
+    queryFn: () => getUserLevel(publicKey!.toString()),
+    enabled: !!connected && !!publicKey && mounted,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
   });
 
   const nfts = profile?.nfts || [];
-  const userLevel = profile?.userLevel || null;
+  const isLoading = isLoadingProfile || isLoadingShards || isLoadingLevel;
+  const error = profileError || shardError || levelError;
+  const refetch = () => {
+    refetchShards();
+    refetchLevel();
+  };
 
   if (!mounted) {
     return (
@@ -75,8 +107,14 @@ export default function ProfilePage() {
             <>
               <WalletAddressCard publicKey={publicKey} />
 
-              {/* User Level Card */}
-              <UserLevelCard isLoading={isLoading} userLevel={userLevel} error={error} refetch={refetch} />
+              {/* User Shard Card */}
+              <UserLevelCard 
+                isLoading={isLoadingShards || isLoadingLevel} 
+                shardStatus={shardStatus || null} 
+                level={userLevel || null}
+                error={error} 
+                refetch={refetch} 
+              />
 
               {/* NFT Collection */}
               <NFTCollection isLoading={isLoading} nfts={nfts} />

@@ -5,8 +5,9 @@ import { MintButton } from "./MintButton";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { getUserProfile, type UserProfile } from "../utils/api";
+import { getUserShardStatus, type UserShardStatus } from "../utils/api";
 import { UserLevelCard } from "./UserLevelCard";
+import { getUserLevel, type UserLevel } from "../utils/api";
 
 const AsciiGenerator = () => {
   const { asciiOutput, zoom } = useAsciiStore();
@@ -18,31 +19,52 @@ const AsciiGenerator = () => {
     setMounted(true);
   }, []);
 
-  // Fetch user profile for level card
+  // Fetch user shard status for shard card
   const {
-    data: profile,
-    isLoading,
-    error,
-    refetch,
-  } = useQuery<UserProfile>({
-    queryKey: ["userProfile", publicKey?.toString()],
-    queryFn: () => getUserProfile(publicKey!.toString()),
+    data: shardStatus,
+    isLoading: isLoadingShards,
+    error: shardError,
+    refetch: refetchShards,
+  } = useQuery<UserShardStatus>({
+    queryKey: ["userShardStatus", publicKey?.toString()],
+    queryFn: () => getUserShardStatus(publicKey!.toString()),
     enabled: !!connected && !!publicKey && mounted,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
   });
 
-  const userLevel = profile?.userLevel || null;
+  // Fetch user level
+  const {
+    data: userLevel,
+    isLoading: isLoadingLevel,
+    error: levelError,
+    refetch: refetchLevel,
+  } = useQuery<UserLevel | null>({
+    queryKey: ["userLevel", publicKey?.toString()],
+    queryFn: () => getUserLevel(publicKey!.toString()),
+    enabled: !!connected && !!publicKey && mounted,
+    staleTime: 30 * 1000,
+    refetchInterval: 60 * 1000,
+    retry: false, // Don't retry on error to avoid repeated JSON parse errors
+  });
+
+  const isLoading = isLoadingShards || isLoadingLevel;
+  const error = shardError || levelError;
+  const refetch = () => {
+    refetchShards();
+    refetchLevel();
+  };
 
   return (
     <main className="flex-1 overflow-y-auto p-6 bg-background flex justify-center">
       <div className="w-full max-w-3xl flex flex-col">
         <div className="flex flex-col gap-8">
-          {/* User Level Card - shown when wallet is connected */}
+          {/* User Shard Card - shown when wallet is connected */}
           {connected && mounted && (
             <UserLevelCard 
+              level={userLevel || null}
               isLoading={isLoading} 
-              userLevel={userLevel} 
+              shardStatus={shardStatus || null} 
               error={error} 
               refetch={refetch} 
             />
