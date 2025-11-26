@@ -7,6 +7,7 @@ import {
   SYSVAR_RENT_PUBKEY,
   LAMPORTS_PER_SOL,
   Keypair,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -130,7 +131,7 @@ function deriveFeeVaultPDA(programId: PublicKey): [PublicKey, number] {
  * Derive the config PDA
  * PDA seeds: ["config"]
  */
-function deriveConfigPDA(programId: PublicKey): [PublicKey, number] {
+export function deriveConfigPDA(programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("config")],
     programId
@@ -202,6 +203,15 @@ export async function initializeProgramConfig({
   }
 
   // Initialize config
+  // Add compute budget instructions for better reliability
+  const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+    units: 200_000, // Config initialization is simpler, needs less compute units
+  });
+  
+  const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: 1_000, // 0.001 SOL per compute unit
+  });
+  
   const signature = await program.methods
     .initializeConfig(treasuryAddress)
     .accounts({
@@ -210,6 +220,7 @@ export async function initializeProgramConfig({
       feeVault: feeVault,
       systemProgram: SystemProgram.programId,
     })
+    .preInstructions([computeBudgetIx, priorityFeeIx])
     .rpc();
 
   console.log(`✓ Config initialized with Program ID: ${programId.toString()}`);
@@ -395,6 +406,20 @@ export async function mintAsciiArtNFTAnchor({
   //   - Creates ATA for the user
   //   - Mints 1 token (NFT)
   //   - Creates metadata via Metaplex
+  
+  // Compute Budget Instructions (Best Practice)
+  // Set compute unit limit to prevent transaction failures
+  // NFT minting with metadata creation typically needs 200k-300k compute units
+  const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
+    units: 300_000, // Safe limit for NFT minting with metadata
+  });
+  
+  // Set priority fee to ensure transaction is processed quickly
+  // Priority fee: 0.001 SOL (1,000,000 microlamports)
+  const priorityFeeIx = ComputeBudgetProgram.setComputeUnitPrice({
+    microLamports: 1_000, // 0.001 SOL per compute unit (adjust based on network conditions)
+  });
+  
   const signature = await program.methods
     .mintAsciiNft(name, "ASCII", metadataUri, new BN(asciiArt.length))
     .accounts({
@@ -411,7 +436,12 @@ export async function mintAsciiArtNFTAnchor({
       associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
       feeVault: feeVault,
     })
-    .preInstructions([createMintAccountIx, initializeMintIx]) // Create & init mint first
+    .preInstructions([
+      computeBudgetIx,      // Set compute unit limit (must be first)
+      priorityFeeIx,         // Set priority fee
+      createMintAccountIx,   // Create mint account
+      initializeMintIx,      // Initialize mint
+    ])
     .signers([mintKeypair]) // Mint keypair required for createAccount
     .rpc();
 

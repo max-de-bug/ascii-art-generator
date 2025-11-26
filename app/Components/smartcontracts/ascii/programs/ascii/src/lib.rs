@@ -48,6 +48,13 @@ pub mod ascii {
         config.treasury = treasury;
         config.mint_fee = DEFAULT_MINT_FEE_LAMPORTS;
         config.min_buyback_amount = MIN_BUYBACK_AMOUNT;
+        
+        // Initialize statistics to zero
+        config.total_mints = 0;
+        config.total_fees_collected = 0;
+        config.total_buybacks_executed = 0;
+        config.total_tokens_bought_back = 0;
+        
         config.bump = ctx.bumps.config;
 
         msg!("Program config initialized");
@@ -182,11 +189,8 @@ pub mod ascii {
             AsciiError::InvalidSwapData
         );
 
-        // Validate buyback token mint matches config
-        require!(
-            ctx.accounts.buyback_token_account.mint == config.buyback_token_mint,
-            AsciiError::InvalidTokenMint
-        );
+        // Buyback token mint is validated by account constraint in ExecuteBuyback struct
+        // This reduces compute units by moving validation to constraints
 
         // WSOL Account Usage Verification
         // Verify that the swap instruction uses the WSOL account we funded
@@ -230,7 +234,21 @@ pub mod ascii {
             AsciiError::SlippageExceeded
         );
 
+        // Update statistics: increment buyback count and tokens bought back
+        let config = &mut ctx.accounts.config;
+        config.total_buybacks_executed = config.total_buybacks_executed
+            .checked_add(1)
+            .ok_or(AsciiError::InvalidAmount)?;
+        config.total_tokens_bought_back = config.total_tokens_bought_back
+            .checked_add(token_amount)
+            .ok_or(AsciiError::InvalidAmount)?;
+
         msg!("Buyback executed: {} SOL swapped for {} tokens", amount, token_amount);
+        msg!(
+            "Statistics: Total buybacks: {}, Total tokens bought: {}",
+            config.total_buybacks_executed,
+            config.total_tokens_bought_back
+        );
 
         emit!(BuybackEvent {
             amount_sol: amount,
@@ -248,34 +266,39 @@ pub mod ascii {
         uri: String, // IPFS URI for metadata JSON
         ascii_length: u32, // Length of ASCII art for validation
     ) -> Result<()> {
-        // Custom validation: Check ASCII art length
+        // Optimized validation: Combine all string validations upfront to fail fast
+        // This reduces compute units by validating before any other operations
+        // and avoids unnecessary string operations if validation fails
+        
+        // Validate ASCII art length
         require!(
             ascii_length >= MIN_ASCII_LENGTH && ascii_length <= MAX_ASCII_LENGTH,
             AsciiError::InvalidLength
         );
 
-        // Validate name length (Metaplex standard: max 32 chars)
+        // Combined string validation: Check all strings in one pass
+        // Using early returns pattern to minimize compute units
+        let name_len = name.len();
+        let symbol_len = symbol.len();
+        let uri_len = uri.len();
+        
         require!(
-            !name.is_empty() && name.len() <= MAX_NAME_LENGTH,
+            name_len > 0 && name_len <= MAX_NAME_LENGTH,
             AsciiError::InvalidName
         );
-
-        // Validate symbol length (Metaplex standard: max 10 chars)
+        
         require!(
-            !symbol.is_empty() && symbol.len() <= MAX_SYMBOL_LENGTH,
+            symbol_len > 0 && symbol_len <= MAX_SYMBOL_LENGTH,
             AsciiError::InvalidSymbol
         );
-
-        // Validate URI length (reasonable limit: 200 chars)
+        
         require!(
-            !uri.is_empty() && uri.len() <= MAX_URI_LENGTH,
+            uri_len > 0 && uri_len <= MAX_URI_LENGTH,
             AsciiError::InvalidUri
         );
 
-        let config = &ctx.accounts.config;
-        
-        // Collect minting fee from config
-        let mint_fee = config.mint_fee;
+        // Read mint fee from config (immutable borrow)
+        let mint_fee = ctx.accounts.config.mint_fee;
         
         // Check payer has enough balance
         let payer_balance = ctx.accounts.payer.get_lamports();
@@ -296,12 +319,20 @@ pub mod ascii {
             mint_fee,
         )?;
 
+        // Update statistics: increment total mints and fees collected
+        // Now we can get mutable reference to config since we're done with immutable operations
+        let config = &mut ctx.accounts.config;
+        config.total_mints = config.total_mints.checked_add(1).ok_or(AsciiError::InvalidAmount)?;
+        config.total_fees_collected = config.total_fees_collected
+            .checked_add(mint_fee)
+            .ok_or(AsciiError::InvalidAmount)?;
+
         msg!("Collected mint fee: {} lamports ({} SOL)", mint_fee, mint_fee as f64 / 1_000_000_000.0);
+        msg!("Statistics: Total mints: {}, Total fees: {} lamports", config.total_mints, config.total_fees_collected);
 
         // The mint is created and initialized by client pre-instructions
-        // We just verify it's properly set up
-        let mint_account_info = ctx.accounts.mint.to_account_info();
-        let mint_owner = mint_account_info.owner;
+        // Ownership is verified by the account constraint in MintAsciiNft struct
+        // This approach reduces compute units by moving validation to constraints
         
         // The mint authority is the mint_authority PDA
         let bump = ctx.bumps.mint_authority;
@@ -311,13 +342,8 @@ pub mod ascii {
         ];
         let signer = &[&mint_authority_seeds[..]];
 
-        // The mint account is created and initialized by the client (pre-instruction)
-        // This avoids Solana's AccountInfo staleness issues when doing create+initialize in the same CPI
-        // Verify the mint is owned by Token Program
-        require!(
-            mint_owner == &anchor_spl::token::ID,
-            AsciiError::InvalidMintAccount
-        );
+        // Mint account ownership is validated by the account constraint
+        // This avoids AccountInfo staleness issues and reduces compute units
         msg!("Mint account verified (owned by Token Program)");
 
         // Create Associated Token Account (ATA) for the payer
@@ -360,6 +386,12 @@ pub mod ascii {
             share: 100,
         }];
 
+        // Create DataV2 for Metaplex metadata
+        // Note: Clones are necessary here because:
+        // 1. DataV2 requires owned String values (not references)
+        // 2. We also need the strings for the event emission
+        // 3. Metaplex CPI requires owned values
+        // This is a trade-off: clones cost compute units but are required for Metaplex compatibility
         let data_v2 = DataV2 {
             name: name.clone(),
             symbol: symbol.clone(),

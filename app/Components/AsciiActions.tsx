@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { CopyIcon, DownloadIcon, ShareIcon } from "lucide-react";
 import { useAsciiStore } from "./store/ascii-store";
 import { toast } from "sonner";
+import { memo } from "react";
 
 // Custom X (Twitter) icon component
 const XIcon = ({ className }: { className?: string }) => (
@@ -142,8 +143,9 @@ export const createImageBlob = (
   });
 };
 
-export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
-  const { zoom } = useAsciiStore();
+export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
+  // Use selector to only subscribe to zoom, preventing unnecessary rerenders
+  const zoom = useAsciiStore((state) => state.zoom);
 
   const copyToClipboard = () => {
     if (!asciiOutput) return;
@@ -261,4 +263,6 @@ export const AsciiActions = ({ asciiOutput }: AsciiActionsProps) => {
       </Button>
     </div>
   );
-};
+});
+
+AsciiActions.displayName = "AsciiActions";

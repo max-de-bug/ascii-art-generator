@@ -696,7 +696,7 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
     if (totalMints > 0) {
       userLevel = await this.userLevelRepository.save(userLevel);
     }
-    
+
     return userLevel;
   }
 

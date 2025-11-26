@@ -4,6 +4,10 @@ use wasm_bindgen::prelude::*;
 mod image_compression;
 pub use image_compression::*;
 
+// Sphere animation module
+mod sphere_animation;
+pub use sphere_animation::*;
+
 // Helper function to clamp values
 #[inline]
 fn clamp(value: f64, min: f64, max: f64) -> f64 {

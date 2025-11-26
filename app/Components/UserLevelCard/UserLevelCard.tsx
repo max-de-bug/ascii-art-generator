@@ -9,7 +9,7 @@ import {
 
 interface UserLevelCardProps {
     isLoading: boolean;
-    shardStatus: UserShardStatus;
+    shardStatus: UserShardStatus | null;
     error: Error | null;
     refetch: () => void;
     level: UserLevel | null;

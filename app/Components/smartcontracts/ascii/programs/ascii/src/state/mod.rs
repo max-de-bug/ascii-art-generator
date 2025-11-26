@@ -19,6 +19,14 @@ pub struct ProgramConfig {
     pub mint_fee: u64,
     /// Minimum SOL amount for buyback execution (8 bytes)
     pub min_buyback_amount: u64,
+    /// Statistics: Total number of NFTs minted (8 bytes)
+    pub total_mints: u64,
+    /// Statistics: Total fees collected in lamports (8 bytes)
+    pub total_fees_collected: u64,
+    /// Statistics: Total number of buybacks executed (8 bytes)
+    pub total_buybacks_executed: u64,
+    /// Statistics: Total tokens bought back (8 bytes)
+    pub total_tokens_bought_back: u64,
     /// PDA bump seed (1 byte) - smallest field last
     pub bump: u8,
 }

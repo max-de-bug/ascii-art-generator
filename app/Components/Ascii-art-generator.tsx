@@ -4,10 +4,47 @@ import { AsciiActions } from "./AsciiActions";
 import { MintButton } from "./MintButton";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, memo } from "react";
 import { getUserShardStatus, type UserShardStatus } from "../utils/api";
 import { UserLevelCard } from "./UserLevelCard";
 import { getUserLevel, type UserLevel } from "../utils/api";
+import { useSphereAnimation } from "./hooks/useSphereAnimation";
+
+// Memoized canvas component to prevent unnecessary rerenders
+const AsciiCanvas = memo(({ asciiOutput, zoom }: { asciiOutput: string; zoom: number[] }) => {
+  const fontSize = useMemo(() => `${(zoom[0] / 100) * 12}px`, [zoom]);
+  const showAnimation = !asciiOutput;
+  const { frame: sphereFrame, isInitialized } = useSphereAnimation(showAnimation);
+  
+  return (
+    <div className="aspect-square bg-card border border-border rounded-lg overflow-hidden flex items-center justify-center">
+      <div className="overflow-auto w-full h-full p-8 flex items-center justify-center">
+        <pre
+          className="font-mono text-foreground leading-tight whitespace-pre select-all text-center"
+          style={{
+            fontSize,
+            fontFamily: '"Geist Mono", monospace',
+            fontWeight: 600,
+            letterSpacing: "-0.5px",
+            lineHeight: "1.1",
+          }}
+        >
+          {asciiOutput ? (
+            <code>{asciiOutput}</code>
+          ) : isInitialized && sphereFrame ? (
+            <code>{sphereFrame}</code>
+          ) : (
+            <span className="text-muted-foreground/40">
+              Generate ASCII art
+            </span>
+          )}
+        </pre>
+      </div>
+    </div>
+  );
+});
+
+AsciiCanvas.displayName = "AsciiCanvas";
 
 const AsciiGenerator = () => {
   const { asciiOutput, zoom } = useAsciiStore();
@@ -62,9 +99,9 @@ const AsciiGenerator = () => {
           {/* User Shard Card - shown when wallet is connected */}
           {connected && mounted && (
             <UserLevelCard 
-              level={userLevel || null}
+              level={userLevel ?? null}
               isLoading={isLoading} 
-              shardStatus={shardStatus || null} 
+              shardStatus={shardStatus ?? null} 
               error={error} 
               refetch={refetch} 
             />
@@ -86,28 +123,7 @@ const AsciiGenerator = () => {
             </p>
           </div>
 
-          <div className="aspect-square bg-card border border-border rounded-lg overflow-hidden flex items-center justify-center">
-            <div className="overflow-auto w-full h-full p-8 flex items-center justify-center">
-              <pre
-                className="font-mono text-foreground leading-tight whitespace-pre select-all text-center"
-                style={{
-                  fontSize: `${(zoom[0] / 100) * 12}px`,
-                  fontFamily: '"Geist Mono", monospace',
-                  fontWeight: 600,
-                  letterSpacing: "-0.5px",
-                  lineHeight: "1.1",
-                }}
-              >
-                {asciiOutput ? (
-                  <code>{asciiOutput}</code>
-                ) : (
-                  <span className="text-muted-foreground/40">
-                    Generate ASCII art
-                  </span>
-                )}
-              </pre>
-            </div>
-          </div>
+          <AsciiCanvas asciiOutput={asciiOutput} zoom={zoom} />
         </div>
         <MintButton />
       </div>

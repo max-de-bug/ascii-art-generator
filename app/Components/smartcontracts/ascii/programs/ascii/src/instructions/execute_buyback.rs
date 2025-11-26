@@ -37,8 +37,11 @@ pub struct ExecuteBuyback<'info> {
     pub wsol_account: Account<'info, TokenAccount>,
 
     /// Buyback token account - receives tokens after swap
-    /// Mint is validated against config in instruction logic
-    #[account(mut)]
+    /// Mint is validated against config to ensure correct token
+    #[account(
+        mut,
+        constraint = buyback_token_account.mint == config.buyback_token_mint @ AsciiError::InvalidTokenMint
+    )]
     pub buyback_token_account: Account<'info, TokenAccount>,
 
     /// Jupiter swap program - validated to ensure correct program

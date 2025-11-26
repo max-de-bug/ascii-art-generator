@@ -25,6 +25,8 @@ declare module "../../../wasm-ascii/pkg/wasm_ascii" {
     contrast: number
   ): string;
 
+  export function generate_sphere_frame(angle: number): string;
+
   export default function init(input?: RequestInfo | URL): Promise<void>;
 }
 

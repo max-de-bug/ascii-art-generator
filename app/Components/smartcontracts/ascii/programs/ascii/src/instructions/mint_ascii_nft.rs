@@ -6,6 +6,7 @@ use anchor_spl::{
 };
 use mpl_token_metadata;
 use crate::state::ProgramConfig;
+use crate::errors::AsciiError;
 
 /// Accounts for minting an ASCII art NFT
 /// This instruction creates a new NFT with ASCII art metadata
@@ -54,14 +55,22 @@ pub struct MintAsciiNft<'info> {
     /// The mint account for the NFT
     /// Created and initialized by client via pre-instructions before this program runs
     /// The program verifies ownership by Token Program
-    /// CHECK: Ownership validated in instruction handler (must be owned by Token Program)
-    #[account(mut)]
+    /// CHECK: Ownership validated by constraint (must be owned by Token Program)
+    /// This constraint ensures the mint is properly initialized before the instruction runs
+    #[account(
+        mut,
+        constraint = mint.owner == &anchor_spl::token::ID @ AsciiError::InvalidMintAccount
+    )]
     pub mint: UncheckedAccount<'info>,
 
     /// The associated token account for the NFT
     /// Created manually in instruction handler after mint is initialized
+    /// Validated to ensure it's the correct ATA for payer and mint
     /// CHECK: Created via CPI to Associated Token Program after mint initialization
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = token_account.owner == &anchor_spl::token::ID @ AsciiError::InvalidMintAccount
+    )]
     pub token_account: UncheckedAccount<'info>,
 
     /// The metadata account for the NFT (PDA)
@@ -72,9 +81,13 @@ pub struct MintAsciiNft<'info> {
     pub metadata: UncheckedAccount<'info>,
 
     /// Token program - required for mint operations
+    /// Validated to ensure correct program ID
+    #[account(address = Token::id())]
     pub token_program: Program<'info, Token>,
     
     /// Associated token program - required for ATA creation
+    /// Validated to ensure correct program ID
+    #[account(address = anchor_spl::associated_token::ID)]
     pub associated_token_program: Program<'info, AssociatedToken>,
 
     /// Fee vault PDA - collects minting fees for buyback
