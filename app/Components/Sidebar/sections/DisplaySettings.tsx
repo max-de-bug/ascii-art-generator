@@ -9,7 +9,7 @@ export const DisplaySettings = () => {
   return (
     <section>
       <h3 
-        className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide"
+        className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide hover:[text-shadow:0_0_10px_currentColor,0_0_20px_currentColor] transition-all duration-300 cursor-pointer"
         style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
       >
         6. Display Settings

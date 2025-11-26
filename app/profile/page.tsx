@@ -53,9 +53,9 @@ export default function ProfilePage() {
     isLoading: isLoadingLevel,
     error: levelError,
     refetch: refetchLevel,
-  } = useQuery<UserLevel>({
+  } = useQuery<UserLevel | null>({
     queryKey: ["userLevel", publicKey?.toString()],
-    queryFn: () => getUserLevel(publicKey!.toString()),
+    queryFn: async () => await getUserLevel(publicKey!.toString()),
     enabled: !!connected && !!publicKey && mounted,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
