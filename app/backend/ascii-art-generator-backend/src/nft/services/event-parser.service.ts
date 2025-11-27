@@ -109,15 +109,15 @@ export class EventParserService {
 
             // Use Anchor's event decoder
             // Anchor events are encoded with discriminator + data
-            // The decoder expects the full buffer including discriminator
+            // The decoder expects a hex string
             let event: any;
             try {
-              // Try decoding with hex string (most common format)
+              // Try decoding with hex string (most common and reliable format)
               event = this.coder.events.decode(data.toString('hex'));
             } catch (hexError: any) {
               this.logger.debug(`[EventParser] Hex decode failed: ${hexError.message}`);
               try {
-                // Try with base64 string directly
+                // Try with base64 string directly (fallback)
                 event = this.coder.events.decode(encodedData);
               } catch (base64DecodeError: any) {
                 this.logger.warn(
@@ -125,6 +125,7 @@ export class EventParserService {
                 );
                 // Log the first few bytes for debugging
                 this.logger.debug(`[EventParser] First 20 bytes (hex): ${data.slice(0, 20).toString('hex')}`);
+                this.logger.debug(`[EventParser] Data length: ${data.length} bytes`);
                 continue;
               }
             }

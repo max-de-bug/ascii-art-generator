@@ -103,7 +103,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    // Load IDL and initialize event parser
+    // Load IDL and initialize event parser (reloads on each startup to get latest version)
     await this.loadIdl();
 
     // Start indexing after a short delay to ensure everything is initialized
@@ -114,14 +114,26 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Load the program IDL and initialize the event parser
+   * Dynamically imports IDL to ensure it's up to date after program upgrades
    */
   private async loadIdl(): Promise<void> {
     try {
-      // Type assertion
-      this.eventParser.setIdl(idl as Idl, this.programId.toBase58());
-      this.logger.log('Loaded IDL from import');
-    } catch (error) {
-      this.logger.error('Failed to load IDL', error);
+      // Dynamically import IDL to get the latest version after program upgrades
+      const idlModule = await import('../../../../../Components/smartcontracts/ascii/target/idl/ascii.json');
+      const latestIdl = (idlModule.default || idlModule) as Idl;
+      
+      // Initialize event parser with latest IDL
+      this.eventParser.setIdl(latestIdl, this.programId.toBase58());
+      this.logger.log(`[Indexer] ✓ Loaded and initialized IDL with ${latestIdl.events?.length || 0} event(s) for program: ${this.programId.toBase58()}`);
+    } catch (error: any) {
+      this.logger.error('[Indexer] Failed to load IDL dynamically', error);
+      // Fallback to static import if dynamic import fails
+      try {
+        this.eventParser.setIdl(idl as Idl, this.programId.toBase58());
+        this.logger.warn('[Indexer] Using fallback static IDL import');
+      } catch (fallbackError) {
+        this.logger.error('[Indexer] Fallback IDL load also failed', fallbackError);
+      }
     }
   }
   async onModuleDestroy() {
@@ -343,9 +355,9 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
           `[Indexer] ✓ Found MintEvent: ${mintEvent.name} (${mintEvent.mint}) minted by ${mintEvent.minter}`,
         );
         
-        // Verify the NFT is still owned by the minter before saving
-        // This prevents indexing NFTs that were immediately burned/transferred
-        // For newly minted NFTs (within 5 minutes), retry ownership check as token account may not be immediately available
+        // For very recent mints (within 2 minutes), skip ownership check
+        // The token account may not be propagated yet, but we know it was just minted
+        // For older transactions, verify ownership to prevent indexing burned/transferred NFTs
         const transactionAge = transaction.blockTime
           ? Date.now() / 1000 - transaction.blockTime
           : 0;

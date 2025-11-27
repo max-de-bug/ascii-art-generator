@@ -14,7 +14,7 @@ import { useSphereAnimation } from "./hooks/useSphereAnimation";
 const AsciiCanvas = memo(({ asciiOutput, zoom }: { asciiOutput: string; zoom: number[] }) => {
   const fontSize = useMemo(() => `${(zoom[0] / 100) * 12}px`, [zoom]);
   const showAnimation = !asciiOutput;
-  const { frame: sphereFrame, isInitialized } = useSphereAnimation(showAnimation);
+  const { frame: sphereFrame, textFrame, isInitialized } = useSphereAnimation(showAnimation, "O.ASCII Art generator");
   
   return (
     <div className="aspect-square bg-card border border-border rounded-lg overflow-hidden flex items-center justify-center">
@@ -32,7 +32,12 @@ const AsciiCanvas = memo(({ asciiOutput, zoom }: { asciiOutput: string; zoom: nu
           {asciiOutput ? (
             <code>{asciiOutput}</code>
           ) : isInitialized && sphereFrame ? (
-            <code>{sphereFrame}</code>
+            <code>
+              {sphereFrame}
+              <br />
+              <br />
+              {textFrame}
+            </code>
           ) : (
             <span className="text-muted-foreground/40">
               Generate ASCII art

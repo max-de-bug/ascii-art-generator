@@ -8,7 +8,7 @@ pub struct UpdateConfig<'info> {
     /// Program config PDA - will be updated by this instruction
     #[account(
         mut,
-        seeds = [b"config"],
+        seeds = [b"config_v2"], // Changed from b"config" to bypass corrupted account
         bump = config.bump,
         has_one = authority @ AsciiError::Unauthorized,
     )]

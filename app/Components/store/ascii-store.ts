@@ -11,7 +11,7 @@ export const ASCII_CHARS = {
 
 // Initial state - extracted for reusability and maintainability
 const initialState = {
-  inputText: "Hello ASCII",
+  inputText: "",
   imageFile: null as File | null,
   asciiOutput: "",
   theme: "dark",

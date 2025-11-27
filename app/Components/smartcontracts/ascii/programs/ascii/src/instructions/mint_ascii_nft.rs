@@ -14,8 +14,10 @@ use crate::errors::AsciiError;
 #[instruction(name: String, symbol: String, uri: String)]
 pub struct MintAsciiNft<'info> {
     /// Program config - provides mint fee and validates fee vault
+    /// CHECK: Validated by seeds constraint - if account is corrupted, it will fail here
+    /// This is intentional - corrupted accounts should be closed and reinitialized
     #[account(
-        seeds = [b"config"],
+        seeds = [b"config_v2"], // Changed from b"config" to bypass corrupted account
         bump = config.bump,
         has_one = fee_vault,
     )]
@@ -64,13 +66,11 @@ pub struct MintAsciiNft<'info> {
     pub mint: UncheckedAccount<'info>,
 
     /// The associated token account for the NFT
-    /// Created manually in instruction handler after mint is initialized
-    /// Validated to ensure it's the correct ATA for payer and mint
-    /// CHECK: Created via CPI to Associated Token Program after mint initialization
-    #[account(
-        mut,
-        constraint = token_account.owner == &anchor_spl::token::ID @ AsciiError::InvalidMintAccount
-    )]
+    /// Created by the program if it doesn't exist
+    /// Will be created via CPI to Associated Token Program
+    /// CHECK: Account may not exist yet - will be created in instruction handler
+    /// The constraint is removed to allow creation - validation happens in create() call
+    #[account(mut)]
     pub token_account: UncheckedAccount<'info>,
 
     /// The metadata account for the NFT (PDA)
@@ -91,12 +91,12 @@ pub struct MintAsciiNft<'info> {
     pub associated_token_program: Program<'info, AssociatedToken>,
 
     /// Fee vault PDA - collects minting fees for buyback
-    /// This is a PDA that holds collected fees
+    /// Program-owned PDA that holds collected fees
     #[account(
         mut,
         seeds = [b"fee_vault"],
         bump,
     )]
-    pub fee_vault: SystemAccount<'info>,
+    pub fee_vault: Account<'info, crate::state::FeeVault>,
 }
 

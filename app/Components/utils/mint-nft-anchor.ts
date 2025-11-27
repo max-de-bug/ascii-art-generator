@@ -133,7 +133,7 @@ function deriveFeeVaultPDA(programId: PublicKey): [PublicKey, number] {
  */
 export function deriveConfigPDA(programId: PublicKey): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
-    [Buffer.from("config")],
+    [Buffer.from("config_v2")], // Changed from "config" to bypass corrupted account
     programId
   );
 }
@@ -203,6 +203,8 @@ export async function initializeProgramConfig({
   }
 
   // Initialize config
+  // Note: The fee_vault will be created automatically by the program if it doesn't exist
+  // This is handled on-chain via CPI to System Program (best practice)
   // Add compute budget instructions for better reliability
   const computeBudgetIx = ComputeBudgetProgram.setComputeUnitLimit({
     units: 200_000, // Config initialization is simpler, needs less compute units

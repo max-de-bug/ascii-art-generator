@@ -5,10 +5,14 @@ import { useEffect, useRef, useState } from "react";
 // Type declarations for WASM module
 declare module "../../../wasm-ascii/pkg/wasm_ascii" {
   export function generate_sphere_frame(angle: number): string;
+  export function generate_text_in_center(text: string, width: number, height: number): string;
   export default function init(input?: RequestInfo | URL): Promise<void>;
 }
 
-let wasmModule: { generate_sphere_frame: (angle: number) => string } | null = null;
+let wasmModule: { 
+  generate_sphere_frame: (angle: number) => string;
+  generate_text_in_center: (text: string, width: number, height: number) => string;
+} | null = null;
 let wasmInitialized = false;
 
 const initWasm = async (): Promise<void> => {
@@ -18,7 +22,10 @@ const initWasm = async (): Promise<void> => {
       // @ts-ignore - TypeScript can't resolve this module until it's built
       const wasm = await import("../../../wasm-ascii/pkg/wasm_ascii");
       await wasm.default();
-      wasmModule = wasm as { generate_sphere_frame: (angle: number) => string };
+      wasmModule = wasm as { 
+        generate_sphere_frame: (angle: number) => string;
+        generate_text_in_center: (text: string, width: number, height: number) => string;
+      };
       wasmInitialized = true;
     } catch (error) {
       console.error("Failed to initialize WASM module for sphere animation:", error);
@@ -29,10 +36,11 @@ const initWasm = async (): Promise<void> => {
 
 /**
  * React hook for animated sphere ASCII art
- * Returns the current frame of the animation
+ * Returns the current frame of the animation and text below it
  */
-export const useSphereAnimation = (enabled: boolean = true) => {
+export const useSphereAnimation = (enabled: boolean = true, text: string = "Generate ASCII art") => {
   const [frame, setFrame] = useState<string>("");
+  const [textFrame, setTextFrame] = useState<string>("");
   const [isInitialized, setIsInitialized] = useState(false);
   const angleRef = useRef(0.0);
   const animationFrameRef = useRef<number | null>(null);
@@ -45,6 +53,7 @@ export const useSphereAnimation = (enabled: boolean = true) => {
         animationFrameRef.current = null;
       }
       setFrame("");
+      setTextFrame("");
       return;
     }
 
@@ -53,7 +62,14 @@ export const useSphereAnimation = (enabled: boolean = true) => {
       if (!wasmInitialized) {
         await initWasm();
       }
-      setIsInitialized(wasmInitialized && wasmModule !== null);
+      const initialized = wasmInitialized && wasmModule !== null;
+      setIsInitialized(initialized);
+      
+      // Generate text frame when initialized or text changes
+      if (initialized && wasmModule) {
+        const textAscii = wasmModule.generate_text_in_center(text, 40, 5);
+        setTextFrame(textAscii);
+      }
     };
 
     initialize();
@@ -83,8 +99,8 @@ export const useSphereAnimation = (enabled: boolean = true) => {
         animationFrameRef.current = null;
       }
     };
-  }, [enabled]);
+  }, [enabled, text]);
 
-  return { frame, isInitialized };
+  return { frame, textFrame, isInitialized };
 };
 

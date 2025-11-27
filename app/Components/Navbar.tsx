@@ -7,7 +7,7 @@ export const Navbar = () => {
         <li>
           <Link
             href="/profile"
-            className="text-lg font-bold text-muted-foreground hover:text-foreground transition-colors"
+            className="text-lg font-bold text-muted-foreground с"
             style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
           >
             Profile

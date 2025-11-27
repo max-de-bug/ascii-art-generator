@@ -58,7 +58,7 @@ export const ToggleNetworkButton = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2" style={pixelFontStyle}>
+        <Button variant="outline" className="gap-2 hover:bg-primary/10 transition-colors duration-300 cursor-pointer" style={pixelFontStyle}>
           <div
             className={cn(
               "w-2 h-2 rounded-full",

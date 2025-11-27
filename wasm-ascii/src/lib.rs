@@ -8,6 +8,10 @@ pub use image_compression::*;
 mod sphere_animation;
 pub use sphere_animation::*;
 
+// Text in center module
+mod text_in_center;
+pub use text_in_center::*;
+
 // Helper function to clamp values
 #[inline]
 fn clamp(value: f64, min: f64, max: f64) -> f64 {

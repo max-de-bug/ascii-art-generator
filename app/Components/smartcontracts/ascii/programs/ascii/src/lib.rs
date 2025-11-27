@@ -42,6 +42,9 @@ pub mod ascii {
             AsciiError::InvalidTreasury
         );
         
+        // Fee vault is created automatically by Anchor if it doesn't exist (init_if_needed)
+        // This is the standard Anchor pattern for program-owned PDAs
+        
         config.authority = ctx.accounts.authority.key();
         config.fee_vault = ctx.accounts.fee_vault.key();
         config.buyback_token_mint = Pubkey::from_str(DEFAULT_BUYBACK_TOKEN_MINT_STR).unwrap();
@@ -56,12 +59,6 @@ pub mod ascii {
         config.total_tokens_bought_back = 0;
         
         config.bump = ctx.bumps.config;
-
-        msg!("Program config initialized");
-        msg!("Authority: {}", config.authority);
-        msg!("Fee vault: {}", config.fee_vault);
-        msg!("Treasury: {}", config.treasury);
-        msg!("Mint fee: {} lamports", config.mint_fee);
 
         Ok(())
     }
@@ -79,18 +76,15 @@ pub mod ascii {
         if let Some(fee) = new_mint_fee {
             require!(fee > 0, AsciiError::InvalidAmount);
             config.mint_fee = fee;
-            msg!("Updated mint fee to: {}", fee);
         }
 
         if let Some(amount) = new_min_buyback_amount {
             require!(amount > 0, AsciiError::InvalidAmount);
             config.min_buyback_amount = amount;
-            msg!("Updated min buyback amount to: {}", amount);
         }
 
         if let Some(treasury) = new_treasury {
             config.treasury = treasury;
-            msg!("Updated treasury to: {}", treasury);
         }
 
         Ok(())
@@ -104,7 +98,6 @@ pub mod ascii {
     ) -> Result<()> {
         let config = &mut ctx.accounts.config;
         
-        msg!("Transferring authority from {} to {}", config.authority, new_authority);
         config.authority = new_authority;
 
         Ok(())
@@ -164,8 +157,6 @@ pub mod ascii {
                 },
             ),
         )?;
-
-        msg!("Wrapped {} lamports to WSOL", amount);
 
         // Step 3: Execute Jupiter swap
         // Jupiter swap instruction data is passed from client (pre-computed via Jupiter API)
@@ -242,13 +233,6 @@ pub mod ascii {
         config.total_tokens_bought_back = config.total_tokens_bought_back
             .checked_add(token_amount)
             .ok_or(AsciiError::InvalidAmount)?;
-
-        msg!("Buyback executed: {} SOL swapped for {} tokens", amount, token_amount);
-        msg!(
-            "Statistics: Total buybacks: {}, Total tokens bought: {}",
-            config.total_buybacks_executed,
-            config.total_tokens_bought_back
-        );
 
         emit!(BuybackEvent {
             amount_sol: amount,
@@ -327,9 +311,6 @@ pub mod ascii {
             .checked_add(mint_fee)
             .ok_or(AsciiError::InvalidAmount)?;
 
-        msg!("Collected mint fee: {} lamports ({} SOL)", mint_fee, mint_fee as f64 / 1_000_000_000.0);
-        msg!("Statistics: Total mints: {}, Total fees: {} lamports", config.total_mints, config.total_fees_collected);
-
         // The mint is created and initialized by client pre-instructions
         // Ownership is verified by the account constraint in MintAsciiNft struct
         // This approach reduces compute units by moving validation to constraints
@@ -344,24 +325,33 @@ pub mod ascii {
 
         // Mint account ownership is validated by the account constraint
         // This avoids AccountInfo staleness issues and reduces compute units
-        msg!("Mint account verified (owned by Token Program)");
 
-        // Create Associated Token Account (ATA) for the payer
+        // Create Associated Token Account (ATA) for the payer if it doesn't exist
         // Must be done after mint is initialized
-        anchor_spl::associated_token::create(
-            CpiContext::new(
-                ctx.accounts.associated_token_program.to_account_info(),
-                anchor_spl::associated_token::Create {
-                    payer: ctx.accounts.payer.to_account_info(),
-                    associated_token: ctx.accounts.token_account.to_account_info(),
-                    authority: ctx.accounts.payer.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    system_program: ctx.accounts.system_program.to_account_info(),
-                    token_program: ctx.accounts.token_program.to_account_info(),
-                },
-            ),
-        )?;
-        msg!("Created associated token account");
+        // Check if account exists first - if not, create it
+        // If it exists, verify it's owned by Token Program
+        if ctx.accounts.token_account.data_is_empty() {
+            // Account doesn't exist - create it
+            anchor_spl::associated_token::create(
+                CpiContext::new(
+                    ctx.accounts.associated_token_program.to_account_info(),
+                    anchor_spl::associated_token::Create {
+                        payer: ctx.accounts.payer.to_account_info(),
+                        associated_token: ctx.accounts.token_account.to_account_info(),
+                        authority: ctx.accounts.payer.to_account_info(),
+                        mint: ctx.accounts.mint.to_account_info(),
+                        system_program: ctx.accounts.system_program.to_account_info(),
+                        token_program: ctx.accounts.token_program.to_account_info(),
+                    },
+                ),
+            )?;
+        } else {
+            // Account exists - verify it's owned by Token Program
+            require!(
+                ctx.accounts.token_account.owner == &anchor_spl::token::ID,
+                AsciiError::InvalidMintAccount
+            );
+        }
 
         // Mint the token (1 token for NFT)
         mint_to(
@@ -416,8 +406,6 @@ pub mod ascii {
         .is_mutable(true)
         .invoke_signed(&[mint_authority_seeds])?;
 
-        msg!("Metadata created, now verifying creator...");
-
         // Verify the creator (payer) - this removes the "Unverified" warning
         // The payer is a signer in this transaction, so they can self-verify
         mpl_token_metadata::instructions::SignMetadataCpiBuilder::new(
@@ -426,13 +414,6 @@ pub mod ascii {
         .metadata(&ctx.accounts.metadata.to_account_info())
         .creator(&ctx.accounts.payer.to_account_info())
         .invoke()?;
-
-        msg!(
-            "Minted and verified ASCII NFT: {} ({}), URI: {}",
-            name,
-            symbol,
-            uri
-        );
 
         // Emit event for indexers to track
         emit!(MintEvent {

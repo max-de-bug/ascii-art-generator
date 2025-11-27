@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use anchor_spl::token::{Token, TokenAccount};
-use crate::{errors::AsciiError, state::ProgramConfig, constants::{jupiter_program_id, wsol_mint}};
+use crate::{errors::AsciiError, state::{ProgramConfig, FeeVault}, constants::{jupiter_program_id, wsol_mint}};
 
 /// Accounts for executing buyback with Jupiter swap
 /// This instruction converts collected fees (SOL) into buyback tokens via Jupiter DEX
@@ -9,7 +9,7 @@ use crate::{errors::AsciiError, state::ProgramConfig, constants::{jupiter_progra
 pub struct ExecuteBuyback<'info> {
     /// Program config - validates authority and provides settings
     #[account(
-        seeds = [b"config"],
+        seeds = [b"config_v2"], // Changed from b"config" to bypass corrupted account
         bump = config.bump,
         has_one = authority @ AsciiError::Unauthorized,
         has_one = fee_vault,
@@ -20,12 +20,13 @@ pub struct ExecuteBuyback<'info> {
     pub authority: Signer<'info>,
 
     /// Fee vault PDA - holds collected fees, will be debited
+    /// Program-owned PDA that holds collected fees
     #[account(
         mut,
         seeds = [b"fee_vault"],
         bump,
     )]
-    pub fee_vault: SystemAccount<'info>,
+    pub fee_vault: Account<'info, FeeVault>,
 
     /// WSOL account (wrapped SOL) - receives SOL and wraps it
     /// This account will hold WSOL before swap

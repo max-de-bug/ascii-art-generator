@@ -19,7 +19,7 @@ export function Header() {
                 className="object-contain"
               />
             </div>
-            <h1 className="m-0">
+            <h1 className="m-0 hover:text-primary transition-colors duration-300 cursor-pointer">
               <Link href="/" className="text-2xl font-bold" style={{ fontFamily: "Retro-computer, 'Courier New', monospace", fontWeight: 700, fontSize: "1.25rem" }}>
                 O.ASCII Art Generator
               </Link>

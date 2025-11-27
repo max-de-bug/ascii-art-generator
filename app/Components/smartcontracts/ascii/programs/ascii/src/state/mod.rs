@@ -30,3 +30,13 @@ pub struct ProgramConfig {
     /// PDA bump seed (1 byte) - smallest field last
     pub bump: u8,
 }
+
+/// Fee vault account
+/// Program-owned PDA that holds collected minting fees
+/// This account only holds SOL (lamports), no data needed
+#[account]
+#[derive(InitSpace)]
+pub struct FeeVault {
+    // Empty struct - this account only holds SOL
+    // The account space is minimal (8 bytes for discriminator)
+}
