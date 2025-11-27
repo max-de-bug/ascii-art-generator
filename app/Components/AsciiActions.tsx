@@ -148,8 +148,12 @@ export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
   const zoom = useAsciiStore((state) => state.zoom);
 
   const copyToClipboard = () => {
-    if (!asciiOutput) return;
+    if (!asciiOutput) {
+      toast.error("Upload the image or type the text");
+      return;
+    }
     navigator.clipboard.writeText(asciiOutput);
+    toast.success("Copied to clipboard!");
   };
 
   const createImageBlobLocal = (
@@ -159,7 +163,10 @@ export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
   };
 
   const shareToTwitter = async () => {
-    if (!asciiOutput) return;
+    if (!asciiOutput) {
+      toast.error("Upload the image or type the text");
+      return;
+    }
 
     try {
       // Create the image blob
@@ -205,7 +212,10 @@ export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
   };
 
   const downloadAsFile = async () => {
-    if (!asciiOutput) return;
+    if (!asciiOutput) {
+      toast.error("Upload the image or type the text");
+      return;
+    }
 
     const blob = await createImageBlobLocal();
     if (!blob) {
@@ -229,8 +239,9 @@ export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
     <div className="flex gap-3 justify-center pt-6">
       <Button
         onClick={copyToClipboard}
-        disabled={!asciiOutput}
-        className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+        className={`bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0 ${
+          !asciiOutput ? "opacity-40 cursor-not-allowed" : ""
+        }`}
         style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
       >
         <span className="flex items-center gap-2">
@@ -240,8 +251,9 @@ export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
       </Button>
       <Button
         onClick={downloadAsFile}
-        disabled={!asciiOutput}
-        className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+        className={`bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0 ${
+          !asciiOutput ? "opacity-40 cursor-not-allowed" : ""
+        }`}
         style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
       >
         <span className="flex items-center gap-2">
@@ -252,8 +264,9 @@ export const AsciiActions = memo(({ asciiOutput }: AsciiActionsProps) => {
 
       <Button
         onClick={shareToTwitter}
-        disabled={!asciiOutput}
-        className="bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0"
+        className={`bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer px-6 py-3 rounded-sm border-0 ${
+          !asciiOutput ? "opacity-40 cursor-not-allowed" : ""
+        }`}
         style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, letterSpacing: "0.05em" }}
       >
         <span className="flex items-center gap-2">

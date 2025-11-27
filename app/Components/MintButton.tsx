@@ -19,8 +19,13 @@ export const MintButton = () => {
   const { network } = useNetwork();
 
   const handleMint = async () => {
+    // Prevent action if already minting
+    if (isMinting) {
+      return;
+    }
+
     if (!asciiOutput) {
-      toast.error("Please generate ASCII art first");
+      toast.error("Upload the image or type the text");
       return;
     }
 
@@ -144,10 +149,11 @@ export const MintButton = () => {
     <div className="mt-4 flex justify-center">
       <Button
         onClick={handleMint}
-        disabled={disabled || isMinting}
         aria-busy={isMinting}
         aria-disabled={disabled || isMinting}
-        className="w-full sm:w-[50%] bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-sm uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 cursor-pointer px-8 py-4 border-0"
+        className={`w-full sm:w-[50%] bg-zinc-900 dark:bg-zinc-800 text-white hover:bg-zinc-800 dark:hover:bg-zinc-700 font-bold text-sm uppercase tracking-wider transition-all duration-200 cursor-pointer px-8 py-4 border-0 ${
+          disabled || isMinting ? "opacity-50 cursor-not-allowed" : ""
+        }`}
         style={{ 
           fontFamily: "var(--font-pixel), var(--font-press-start), monospace", 
           fontWeight: 600, 
