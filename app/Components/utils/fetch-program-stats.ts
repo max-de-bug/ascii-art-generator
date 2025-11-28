@@ -37,13 +37,22 @@ export async function fetchProgramStats(
       if (typeof window === "undefined") {
         throw new Error("IDL loading must happen client-side");
       }
+      // Try to import IDL - use dynamic import with error handling
       const idlModule = await import(
         "../smartcontracts/ascii/target/idl/ascii.json"
-      );
+      ).catch(() => {
+        // Fallback: try alternative path or return null
+        return null;
+      });
+      
+      if (!idlModule) {
+        throw new Error("IDL module not found");
+      }
+      
       idl = (idlModule.default || idlModule) as Idl;
-    } catch (error) {
+    } catch (error: any) {
       throw new Error(
-        "IDL not found. Please run 'anchor build' in the smartcontracts/ascii directory first."
+        `IDL not found: ${error.message}. Please run 'anchor build' in the smartcontracts/ascii directory first.`
       );
     }
 
