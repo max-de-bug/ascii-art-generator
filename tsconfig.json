@@ -29,6 +29,7 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "**/*.mts",
+    "**/*.d.ts",
     "app/Components/smartcontracts/**/*.json"
   ],
   "exclude": ["node_modules"]
