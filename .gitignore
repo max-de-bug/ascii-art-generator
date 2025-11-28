@@ -51,3 +51,6 @@ keypairs/
 !tsconfig.json
 !package.json
 !package-lock.json
+
+# WASM - allow pkg directory to be committed for deployment
+# wasm-ascii/pkg/ is needed for deployment without wasm-pack

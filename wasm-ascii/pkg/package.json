@@ -1,0 +1,15 @@
+{
+  "name": "wasm-ascii",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "wasm_ascii_bg.wasm",
+    "wasm_ascii.js",
+    "wasm_ascii.d.ts"
+  ],
+  "main": "wasm_ascii.js",
+  "types": "wasm_ascii.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
