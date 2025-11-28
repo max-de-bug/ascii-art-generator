@@ -32,5 +32,9 @@
     "**/*.d.ts",
     "app/Components/smartcontracts/**/*.json"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "app/backend/**/*",
+    "**/backend/**/*"
+  ]
 }
