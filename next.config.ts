@@ -66,6 +66,23 @@ const nextConfig: NextConfig = {
       'path': { browser: './empty-module.ts' },
       'util': { browser: './empty-module.ts' },
     },
+    resolveExtensions: ['.json', '.ts', '.tsx', '.js', '.jsx'],
+  },
+  
+  // Webpack configuration for JSON imports (only used if not using Turbopack)
+  webpack: (config, { isServer }) => {
+    // Allow JSON imports from the smartcontracts directory
+    config.resolve.extensionAlias = {
+      '.json': ['.json'],
+    };
+    // Ensure JSON files are included in the build
+    config.module = config.module || {};
+    config.module.rules = config.module.rules || [];
+    config.module.rules.push({
+      test: /\.json$/,
+      type: 'json',
+    });
+    return config;
   },
 };
 
