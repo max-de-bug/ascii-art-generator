@@ -8,14 +8,45 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 const express = require('express');
 
 let cachedApp: any;
+let appInitializing = false;
+let initError: Error | null = null;
+
+// Helper function to set CORS headers
+function setCorsHeaders(req: VercelRequest, res: VercelResponse) {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+    res.setHeader('Access-Control-Max-Age', '86400');
+  }
+}
 
 async function createApp() {
+  // If already cached, return it
   if (cachedApp) {
     return cachedApp;
   }
 
-  const expressApp = express();
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
+  // If currently initializing, wait for it
+  if (appInitializing) {
+    while (appInitializing) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (initError) {
+      throw initError;
+    }
+    return cachedApp;
+  }
+
+  appInitializing = true;
+  initError = null;
+
+  try {
+    console.log('[Serverless] Initializing NestJS app...');
+    const expressApp = express();
+    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
 
   // Enable CORS for frontend - CRITICAL for Vercel
   const allowedOrigins = process.env.FRONTEND_URL
@@ -73,78 +104,102 @@ async function createApp() {
     maxAge: 86400,
   });
 
-  // Initialize app (DO NOT call listen() - this is serverless!)
-  await app.init();
-  cachedApp = expressApp;
-  
-  console.log('[Serverless] App initialized');
-  return cachedApp;
+    // Initialize app (DO NOT call listen() - this is serverless!)
+    await app.init();
+    cachedApp = expressApp;
+    appInitializing = false;
+    
+    console.log('[Serverless] App initialized successfully');
+    return cachedApp;
+  } catch (error: any) {
+    appInitializing = false;
+    initError = error;
+    console.error('[Serverless] Failed to initialize app:', error);
+    throw error;
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // ALWAYS set CORS headers first, before anything else
+  setCorsHeaders(req, res);
+  
   console.log(`[Handler] ${req.method} ${req.url} from origin: ${req.headers.origin}`);
+  console.log(`[Handler] Headers:`, JSON.stringify(req.headers, null, 2));
+  
+  // Simple health check route (before NestJS initialization)
+  if (req.url === '/health' || req.url === '/api/health') {
+    console.log('[Handler] Health check requested');
+    return res.status(200).json({ 
+      status: 'ok', 
+      handler: 'working',
+      timestamp: new Date().toISOString()
+    });
+  }
   
   // Handle OPTIONS preflight requests immediately
   if (req.method === 'OPTIONS') {
     console.log('[Handler] Handling OPTIONS preflight');
-    const origin = req.headers.origin || '*';
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
-    res.setHeader('Access-Control-Max-Age', '86400');
     return res.status(200).end();
   }
 
   try {
     console.log('[Handler] Creating/getting app...');
     const app = await createApp();
-    console.log('[Handler] App ready, processing request...');
-    
-    // Set CORS headers BEFORE processing request
-    const origin = req.headers.origin;
-    if (origin) {
-      console.log(`[Handler] Setting CORS headers for origin: ${origin}`);
-      res.setHeader('Access-Control-Allow-Origin', origin);
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-    }
+    console.log('[Handler] App ready, processing request:', req.url);
     
     // Handle the request through Express/NestJS
-    // Use a promise to ensure the handler waits for the response
     return new Promise<void>((resolve) => {
-      // Set up response finish handler
-      res.on('finish', () => {
-        console.log('[Handler] Response finished');
-        resolve();
-      });
+      let resolved = false;
       
-      res.on('close', () => {
-        console.log('[Handler] Response closed');
-        resolve();
-      });
+      const finishHandler = () => {
+        if (!resolved) {
+          resolved = true;
+          console.log('[Handler] Response finished');
+          resolve();
+        }
+      };
+      
+      res.once('finish', finishHandler);
+      res.once('close', finishHandler);
+      
+      // Set timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.log('[Handler] Timeout - resolving anyway');
+          if (!res.headersSent) {
+            setCorsHeaders(req, res);
+            res.status(504).json({ error: 'Request timeout' });
+          }
+          resolve();
+        }
+      }, 29000); // 29 second timeout (Vercel has 30s limit)
       
       // Process the request
-      app(req, res, () => {
-        // If response hasn't finished yet, this callback means Express is done processing
-        // but response might still be sending
-        if (!res.headersSent) {
-          console.log('[Handler] Express done, but response not sent yet');
+      app(req, res, (err?: any) => {
+        clearTimeout(timeout);
+        if (err && !resolved) {
+          resolved = true;
+          console.error('[Handler] Express error:', err);
+          setCorsHeaders(req, res);
+          if (!res.headersSent) {
+            res.status(500).json({ error: err.message || 'Internal server error' });
+          }
+          resolve();
         }
       });
     });
   } catch (error: any) {
     console.error('[Handler Error]', error);
     console.error('[Handler Error Stack]', error?.stack);
-    // Set CORS headers even on error
-    const origin = req.headers.origin || '*';
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-    res.status(500).json({ 
-      error: error?.message || 'Internal server error',
-      details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
-    });
+    // CORS headers already set at the beginning
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: error?.message || 'Internal server error',
+        handler: 'error',
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      });
+    }
   }
 }
 
