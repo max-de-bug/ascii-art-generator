@@ -304,10 +304,9 @@ export async function mintAsciiArtNFTAnchor({
       throw new Error("IDL loading must happen client-side");
     }
     // Try to load the IDL from the generated file
-    // For Next.js, use absolute path from project root using @ alias
-    // @/ maps to project root, so @/app/Components is correct
+    // Use relative path for better webpack/Turbopack compatibility
     const idlModule = await import(
-      "@/app/Components/smartcontracts/ascii/target/idl/ascii.json"
+      "../smartcontracts/ascii/target/idl/ascii.json"
     );
     // Type assertion needed: JSON imports infer string types for literals like "const"
     // but Anchor's Idl type expects literal types. This is safe because the IDL

@@ -37,10 +37,10 @@ export async function fetchProgramStats(
       if (typeof window === "undefined") {
         throw new Error("IDL loading must happen client-side");
       }
-      // Try to import IDL - use absolute path with @ alias (same as mint-nft-anchor.ts)
-      // This ensures webpack/Turbopack can resolve it at build time
+      // Try to import IDL - use relative path that webpack can resolve at build time
+      // Using relative path instead of @ alias for better webpack compatibility
       const idlModule = await import(
-        "@/app/Components/smartcontracts/ascii/target/idl/ascii.json"
+        "../smartcontracts/ascii/target/idl/ascii.json"
       ).catch(() => {
         // Fallback: try alternative path or return null
         return null;
