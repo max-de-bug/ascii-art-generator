@@ -206,88 +206,174 @@ export class EventParserService {
       `[EventParser] Using fallback parser. Checking ${logMessages.length} logs for mint-related messages`,
     );
 
+    // Look for "Instruction: MintAsciiNft" log which indicates a mint transaction
+    let foundMintInstruction = false;
     for (const log of logMessages) {
-      // Look for mint-related logs - the actual log says "Minted and verified ASCII NFT"
       if (
+        log.includes('Instruction: MintAsciiNft') ||
         log.includes('Minted ASCII NFT') ||
         log.includes('Minted and verified ASCII NFT') ||
         log.includes('mint_ascii_nft')
       ) {
-        this.logger.debug(`[EventParser] Found mint-related log in fallback: ${log}`);
-        // Try to extract information from log message
-        // Log format: "Minted and verified ASCII NFT: {name} ({symbol}), URI: {uri}"
-        const nameMatch =
-          log.match(/Minted (?:and verified )?ASCII NFT: ([^(]+)/) ||
-          log.match(/Minted ASCII NFT: ([^(]+)/);
-        const symbolMatch = log.match(/\(([^)]+)\)/);
-        const uriMatch = log.match(/URI: (.+)/);
+        foundMintInstruction = true;
+        this.logger.log(`[EventParser] Found mint instruction log in fallback: ${log}`);
+        break;
+      }
+    }
 
-        // Get accounts from transaction to extract minter and mint
-        const accountKeys = transaction.transaction.message.accountKeys || [];
+    if (!foundMintInstruction) {
+      return null;
+    }
 
-        // First account is usually the signer (minter)
-        const minter = accountKeys[0]?.pubkey?.toString();
-
-        // Mint account is usually in the accounts array
-        // We need to find the mint address - it's typically a new account created
-        let mint: string | null = null;
-
-        // Check pre and post balances to find new accounts (the mint)
-        const preBalances = transaction.meta?.preBalances || [];
-        const postBalances = transaction.meta?.postBalances || [];
-
-        for (let i = 0; i < accountKeys.length; i++) {
-          const account = accountKeys[i];
-          // New accounts have 0 pre-balance and non-zero post-balance
-          if (preBalances[i] === 0 && postBalances[i] > 0) {
-            // This might be the mint account
-            mint = account.pubkey?.toString() || null;
-            break;
+    // Try to extract event data from "Program data:" log
+    let name = 'ASCII Art';
+    let symbol = 'ASCII';
+    let uri = '';
+    
+    for (const log of logMessages) {
+      if (log.includes('Program data:')) {
+        try {
+          const match = log.match(/Program data: (.+)/);
+          if (match) {
+            const encodedData = match[1];
+            // Try to decode the base64 data to extract event information
+            const data = Buffer.from(encodedData, 'base64');
+            // The event data structure: discriminator (8 bytes) + event data
+            // After discriminator, we might find name, symbol, uri
+            // For now, we'll extract what we can from the transaction accounts
+            this.logger.debug(`[EventParser] Found Program data log, will extract from accounts`);
           }
+        } catch (e) {
+          // Ignore decode errors, we'll use defaults
         }
+      }
+      
+      // Extract name, symbol, uri from log if available
+      const nameMatch =
+        log.match(/Minted (?:and verified )?ASCII NFT: ([^(]+)/) ||
+        log.match(/Minted ASCII NFT: ([^(]+)/);
+      if (nameMatch) {
+        name = nameMatch[1].trim();
+      }
+      const symbolMatch = log.match(/\(([^)]+)\)/);
+      if (symbolMatch) {
+        symbol = symbolMatch[1];
+      }
+      const uriMatch = log.match(/URI: (.+)/);
+      if (uriMatch) {
+        uri = uriMatch[1];
+      }
+    }
 
-        // Alternative: Look for mint in instruction accounts
-        if (!mint) {
-          const instructions =
-            transaction.transaction.message.instructions || [];
-          for (const instruction of instructions) {
-            if ('accounts' in instruction) {
-              const accounts = instruction.accounts as any[];
-              // The mint is typically the first writable account after the payer
-              if (accounts.length > 1) {
-                mint = accounts[1]?.toString();
+    // Get accounts from transaction to extract minter and mint
+    const accountKeys = transaction.transaction.message.accountKeys || [];
+    
+    // Get transaction signers - the first account is typically the payer/minter
+    // For ParsedMessage, we can't access header, so we use the first account
+    // In Solana transactions, the first account is almost always the fee payer/signer
+    const minter = accountKeys[0]?.pubkey?.toString() || 
+                   (typeof accountKeys[0] === 'string' ? accountKeys[0] : accountKeys[0]?.toString()) ||
+                   null;
+
+    // Mint account is usually in the instruction accounts
+    // For mint_ascii_nft, the mint is typically at index 6 in the accounts array
+    let mint: string | null = null;
+
+    // Look for mint in instruction accounts (more reliable than balance checks)
+    // Instruction accounts can be either PublicKey objects or indices into accountKeys
+    const instructions =
+      transaction.transaction.message.instructions || [];
+    for (const instruction of instructions) {
+      if ('accounts' in instruction) {
+        const accounts = instruction.accounts as any[];
+        // Try different indices where mint might be located
+        // Index 6 is common for mint_ascii_nft instruction (after config, payer, tokenMetadataProgram, systemProgram, rent, mintAuthority)
+        if (accounts.length > 6) {
+          const accountRef = accounts[6];
+          if (accountRef !== undefined && accountRef !== null) {
+            // If it's a number, it's an index into accountKeys
+            if (typeof accountRef === 'number') {
+              const accountKey = accountKeys[accountRef];
+              if (accountKey) {
+                mint = accountKey.pubkey?.toString() || accountKey.toString();
+                this.logger.log(`[EventParser] Found mint at instruction account index 6 (accountKeys[${accountRef}]): ${mint}`);
                 break;
               }
+            } else {
+              // It's already a PublicKey or string
+              mint = typeof accountRef === 'string' 
+                ? accountRef 
+                : accountRef.toString();
+              this.logger.log(`[EventParser] Found mint at instruction account index 6: ${mint}`);
+              break;
             }
           }
         }
-
-        if (minter && mint && nameMatch) {
-          const name = nameMatch[1].trim();
-          const symbol = symbolMatch ? symbolMatch[1] : 'ASCII';
-          const uri = uriMatch ? uriMatch[1] : '';
-          const timestamp = transaction.blockTime
-            ? transaction.blockTime
-            : Math.floor(Date.now() / 1000);
-
-          this.logger.log(
-            `[EventParser] ✓ Parsed MintEvent from logs: ${name} (${mint}) minted by ${minter}`,
-          );
-
-          return {
-            minter,
-            mint,
-            name,
-            symbol,
-            uri,
-            timestamp,
-          };
-        } else {
-          this.logger.warn(
-            `[EventParser] Could not extract all required fields. minter: ${minter}, mint: ${mint}, nameMatch: ${!!nameMatch}`,
-          );
+        // Fallback: try index 5 (mint might be at index 5)
+        if (!mint && accounts.length > 5) {
+          const accountRef = accounts[5];
+          if (accountRef !== undefined && accountRef !== null) {
+            if (typeof accountRef === 'number') {
+              const accountKey = accountKeys[accountRef];
+              if (accountKey) {
+                mint = accountKey.pubkey?.toString() || accountKey.toString();
+                this.logger.log(`[EventParser] Found mint at instruction account index 5 (accountKeys[${accountRef}]): ${mint}`);
+                break;
+              }
+            } else {
+              mint = typeof accountRef === 'string' 
+                ? accountRef 
+                : accountRef.toString();
+              this.logger.log(`[EventParser] Found mint at instruction account index 5: ${mint}`);
+              break;
+            }
+          }
         }
       }
+    }
+
+    // Fallback: Check pre and post balances to find new accounts (the mint)
+    if (!mint) {
+      const preBalances = transaction.meta?.preBalances || [];
+      const postBalances = transaction.meta?.postBalances || [];
+
+      for (let i = 0; i < accountKeys.length; i++) {
+        const account = accountKeys[i];
+        // New accounts have 0 pre-balance and non-zero post-balance
+        if (preBalances[i] === 0 && postBalances[i] > 0) {
+          const potentialMint = account.pubkey?.toString() || account.toString();
+          // Skip system accounts and known program accounts
+          if (!potentialMint.includes('11111111111111111111111111111111') && 
+              !potentialMint.includes('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')) {
+            mint = potentialMint;
+            this.logger.log(`[EventParser] Found mint via balance check: ${mint}`);
+            break;
+          }
+        }
+      }
+    }
+
+    if (minter && mint) {
+      const timestamp = transaction.blockTime
+        ? transaction.blockTime
+        : Math.floor(Date.now() / 1000);
+
+      this.logger.log(
+        `[EventParser] ✓ Parsed MintEvent from logs: ${name} (${mint}) minted by ${minter}`,
+      );
+
+      return {
+        minter,
+        mint,
+        name,
+        symbol,
+        uri,
+        timestamp,
+      };
+    } else {
+      this.logger.warn(
+        `[EventParser] Could not extract all required fields. minter: ${minter}, mint: ${mint}`,
+      );
     }
 
     return null;

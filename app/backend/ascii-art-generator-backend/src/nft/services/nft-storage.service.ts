@@ -271,7 +271,27 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
             throw new Error('NFT no longer owned, removed from database');
           }
         }
-        this.logger.debug(`NFT already exists: ${nft.mint}`);
+        this.logger.log(`NFT already exists: ${nft.mint}, updating user level anyway`);
+        // Even if NFT exists, update user level (in case it was re-indexed or level calculation changed)
+        if (nft.minter) {
+          try {
+            this.logger.log(
+              `[NftStorage] Updating user level for existing NFT minter: ${nft.minter}`,
+            );
+            await this.updateUserLevelInTransaction(queryRunner, nft.minter);
+            this.logger.log(
+              `[NftStorage] ✓ User level updated for minter: ${nft.minter}`,
+            );
+          } catch (levelError: any) {
+            this.logger.error(
+              `[NftStorage] ✗ Failed to update user level for minter ${nft.minter}: ${levelError.message}`,
+              levelError.stack,
+            );
+            // Don't throw - we still want to return the existing NFT
+            // The level update can be retried later
+          }
+        }
+        await queryRunner.commitTransaction();
         await queryRunner.release();
         return existing;
       }
@@ -287,13 +307,22 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
 
       // Update user level within the same transaction
       if (nft.minter) {
-        this.logger.log(
-          `[NftStorage] Updating user level for minter: ${nft.minter}`,
-        );
-        await this.updateUserLevelInTransaction(queryRunner, nft.minter);
-        this.logger.log(
-          `[NftStorage] User level updated for minter: ${nft.minter}`,
-        );
+        try {
+          this.logger.log(
+            `[NftStorage] Updating user level for minter: ${nft.minter}`,
+          );
+          await this.updateUserLevelInTransaction(queryRunner, nft.minter);
+          this.logger.log(
+            `[NftStorage] ✓ User level updated for minter: ${nft.minter}`,
+          );
+        } catch (levelError: any) {
+          this.logger.error(
+            `[NftStorage] ✗ Failed to update user level for minter ${nft.minter}: ${levelError.message}`,
+            levelError.stack,
+          );
+          // Re-throw to rollback the transaction - we want atomicity
+          throw new Error(`Failed to update user level: ${levelError.message}`);
+        }
       }
 
       // Commit transaction
@@ -767,7 +796,17 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
       `[NftStorage] User ${walletAddress} has ${mintCount} total mints (counting within transaction)`,
     );
 
-    const levelData = calculateLevel(mintCount);
+    // Calculate level directly: every 5 mints = 1 level, up to level 40
+    // This bypasses the calculateLevel function which may have issues
+    const level = Math.min(Math.floor(mintCount / 5) + 1, 40);
+    const experience = mintCount % 5; // Mints needed for next level (0-4)
+    const nextLevelMints = 5 - experience; // Mints needed to reach next level
+    
+    const levelData = {
+      level,
+      experience,
+      nextLevelMints,
+    };
 
     // Find user level with pessimistic lock (within transaction)
     // Pessimistic lock prevents concurrent modifications

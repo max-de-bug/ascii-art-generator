@@ -335,10 +335,31 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      // Try to parse MintEvent first
+      // Filter transactions: only process if they involve our program
+      const accountKeys = transaction.transaction.message.accountKeys || [];
+      const hasProgramAccount = accountKeys.some(
+        (acc) => {
+          const pubkey = acc.pubkey?.toString() || acc.toString();
+          return pubkey === this.programId.toString();
+        }
+      );
+      
+      // Also check if transaction has program logs
       const txLogMessages = transaction.meta?.logMessages || [];
+      const hasProgramLogs = txLogMessages.some(log => 
+        log.includes(this.programId.toString())
+      );
+
+      if (!hasProgramAccount && !hasProgramLogs) {
+        this.logger.debug(
+          `[Indexer] Transaction ${signature} does not involve our program, skipping`,
+        );
+        return;
+      }
+
+      // Try to parse MintEvent first
       this.logger.log(
-        `[Indexer] Attempting to parse MintEvent from transaction ${signature}. Log count: ${txLogMessages.length}`,
+        `[Indexer] Attempting to parse MintEvent from transaction ${signature}. Log count: ${txLogMessages.length}, Has program account: ${hasProgramAccount}, Has program logs: ${hasProgramLogs}`,
       );
       
       // Log first few logs to see what we're working with
@@ -355,36 +376,45 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
           `[Indexer] ✓ Found MintEvent: ${mintEvent.name} (${mintEvent.mint}) minted by ${mintEvent.minter}`,
         );
         
-        // For very recent mints (within 2 minutes), skip ownership check
+        // For very recent mints (within 2 minutes), skip ownership check entirely
         // The token account may not be propagated yet, but we know it was just minted
         // For older transactions, verify ownership to prevent indexing burned/transferred NFTs
         const transactionAge = transaction.blockTime
           ? Date.now() / 1000 - transaction.blockTime
           : 0;
-        const isRecentMint = transactionAge < 300; // 5 minutes
+        const isVeryRecentMint = transactionAge < 120; // 2 minutes - skip ownership check
+        const isRecentMint = transactionAge < 300; // 5 minutes - retry ownership check
         
-        let isOwned = false;
-        if (isRecentMint) {
-          // Retry ownership check for recent mints (token account propagation delay)
-          this.logger.debug(
+        let isOwned = true; // Default to true for very recent mints
+        
+        if (isVeryRecentMint) {
+          // Skip ownership check for very recent mints (< 2 minutes)
+          // We know the NFT was just minted, so it must be owned
+          this.logger.log(
+            `[Indexer] Very recent mint detected (${Math.round(transactionAge)}s old), skipping ownership check (assumed owned)`,
+          );
+        } else if (isRecentMint) {
+          // Retry ownership check for recent mints (2-5 minutes old) - token account propagation delay
+          this.logger.log(
             `[Indexer] Recent mint detected (${Math.round(transactionAge)}s old), retrying ownership check...`,
           );
-          for (let attempt = 0; attempt < 3; attempt++) {
+          isOwned = false;
+          for (let attempt = 0; attempt < 5; attempt++) {
             isOwned = await this.nftStorage.isNftOwnedByWallet(
               mintEvent.mint,
               mintEvent.minter,
             );
             if (isOwned) {
-              this.logger.debug(
-                `[Indexer] Ownership verified on attempt ${attempt + 1} for NFT ${mintEvent.mint}`,
+              this.logger.log(
+                `[Indexer] ✓ Ownership verified on attempt ${attempt + 1} for NFT ${mintEvent.mint}`,
               );
               break;
             }
-            if (attempt < 2) {
-              // Wait 2 seconds before retry (except on last attempt)
-              await new Promise((resolve) => setTimeout(resolve, 2000));
+            if (attempt < 4) {
+              // Wait 3 seconds before retry (except on last attempt)
+              await new Promise((resolve) => setTimeout(resolve, 3000));
               this.logger.debug(
-                `[Indexer] Ownership check failed, retrying... (attempt ${attempt + 2}/3)`,
+                `[Indexer] Ownership check failed, retrying... (attempt ${attempt + 2}/5)`,
               );
             }
           }
@@ -466,28 +496,28 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
 
       // No recognized event found, skip
       // Log transaction details for debugging if it's from our program
-      const accountKeys = transaction.transaction.message.accountKeys || [];
       const logMessages = transaction.meta?.logMessages || [];
-      const hasProgramAccount = accountKeys.some(
-        (acc) => acc.pubkey?.toString() === this.programId.toString(),
-      );
       
-      if (hasProgramAccount) {
+      if (hasProgramAccount || hasProgramLogs) {
         // Check if transaction actually invoked our program
         const programLogs = logMessages.filter((log) =>
           log.includes(this.programId.toString()),
         );
         
         if (programLogs.length > 0) {
-          this.logger.debug(
-            `Transaction ${signature} invoked our program but no MintEvent or BuybackEvent found. Log count: ${logMessages.length}, Program logs: ${programLogs.length}`,
+          this.logger.warn(
+            `[Indexer] ⚠ Transaction ${signature} invoked our program but no MintEvent or BuybackEvent found. Log count: ${logMessages.length}, Program logs: ${programLogs.length}`,
           );
           // Log first few program logs for debugging
           if (programLogs.length > 0) {
-            this.logger.debug(
-              `Program logs: ${programLogs.slice(0, 5).join(' | ')}`,
+            this.logger.warn(
+              `[Indexer] Program logs: ${programLogs.slice(0, 5).join(' | ')}`,
             );
           }
+          // Log all logs to help debug why event parsing failed
+          this.logger.warn(
+            `[Indexer] All transaction logs: ${logMessages.join(' | ')}`,
+          );
         }
       }
     } catch (error) {
