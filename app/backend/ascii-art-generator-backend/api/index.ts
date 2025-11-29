@@ -2,7 +2,10 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { AppModule } from '../src/app.module';
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+// Vercel types - using any to avoid import issues during build
+type VercelRequest = any;
+type VercelResponse = any;
 
 // Express is provided by @nestjs/platform-express
 const express = require('express');
