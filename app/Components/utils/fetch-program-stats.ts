@@ -39,11 +39,9 @@ export async function fetchProgramStats(
       }
       // Try to import IDL - use relative path that webpack can resolve at build time
       // Using relative path instead of @ alias for better webpack compatibility
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore - JSON module import path resolution
-      const idlModule = await import(
-        "../smartcontracts/ascii/target/idl/ascii.json"
-      ).catch(() => {
+      // TypeScript can't resolve JSON imports at compile time, but webpack/Turbopack can at build time
+      const idlPath = "../smartcontracts/ascii/target/idl/ascii.json" as any;
+      const idlModule = await import(idlPath).catch(() => {
         // Fallback: try alternative path or return null
         return null;
       });
