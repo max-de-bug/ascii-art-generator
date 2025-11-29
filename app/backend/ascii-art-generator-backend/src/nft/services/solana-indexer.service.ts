@@ -16,7 +16,8 @@ import { EventParserService } from './event-parser.service';
 import { NftStorageService } from './nft-storage.service';
 import { NFT } from '../entities/nft.entity';
 import { BuybackEvent } from '../entities/buyback-event.entity';
-import idl from '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json';
+// IDL import - will be loaded dynamically to handle missing file gracefully
+// import idl from '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json';
 /**
  * Solana Indexer Service
  * Listens to Solana transactions and indexes MintEvent
@@ -115,25 +116,44 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   /**
    * Load the program IDL and initialize the event parser
    * Dynamically imports IDL to ensure it's up to date after program upgrades
+   * Gracefully handles missing IDL file (common in serverless environments)
    */
   private async loadIdl(): Promise<void> {
-    try {
-      // Dynamically import IDL to get the latest version after program upgrades
-      const idlModule = await import('../../../../../Components/smartcontracts/ascii/target/idl/ascii.json');
-      const latestIdl = (idlModule.default || idlModule) as Idl;
-      
-      // Initialize event parser with latest IDL
-      this.eventParser.setIdl(latestIdl, this.programId.toBase58());
-      this.logger.log(`[Indexer] ✓ Loaded and initialized IDL with ${latestIdl.events?.length || 0} event(s) for program: ${this.programId.toBase58()}`);
-    } catch (error: any) {
-      this.logger.error('[Indexer] Failed to load IDL dynamically', error);
-      // Fallback to static import if dynamic import fails
+    const idlPaths = [
+      // Try multiple possible paths
+      '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json',
+      '../../../Components/smartcontracts/ascii/target/idl/ascii.json',
+      '../../../../Components/smartcontracts/ascii/target/idl/ascii.json',
+      process.env.IDL_PATH, // Environment variable path
+    ].filter(Boolean);
+
+    let loaded = false;
+    
+    for (const idlPath of idlPaths) {
       try {
-      this.eventParser.setIdl(idl as Idl, this.programId.toBase58());
-        this.logger.warn('[Indexer] Using fallback static IDL import');
-      } catch (fallbackError) {
-        this.logger.error('[Indexer] Fallback IDL load also failed', fallbackError);
+        if (!idlPath) continue;
+        
+        // Dynamically import IDL to get the latest version after program upgrades
+        const idlModule = await import(idlPath);
+        const latestIdl = (idlModule.default || idlModule) as Idl;
+        
+        if (latestIdl && latestIdl.events) {
+          // Initialize event parser with latest IDL
+          this.eventParser.setIdl(latestIdl, this.programId.toBase58());
+          this.logger.log(`[Indexer] ✓ Loaded and initialized IDL with ${latestIdl.events?.length || 0} event(s) for program: ${this.programId.toBase58()}`);
+          loaded = true;
+          break;
+        }
+      } catch (error: any) {
+        // Continue to next path
+        this.logger.debug(`[Indexer] Failed to load IDL from ${idlPath}: ${error.message}`);
       }
+    }
+
+    if (!loaded) {
+      this.logger.warn('[Indexer] ⚠ Could not load IDL file. Event parsing may be limited. The indexer will continue with fallback parsing methods.');
+      // Don't throw - allow the service to continue without IDL
+      // The event parser has fallback methods that don't require IDL
     }
   }
   async onModuleDestroy() {

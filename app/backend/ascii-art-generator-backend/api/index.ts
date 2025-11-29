@@ -50,8 +50,16 @@ async function createApp() {
 
   try {
     console.log('[Serverless] Initializing NestJS app...');
+    console.log('[Serverless] Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      hasDB_HOST: !!process.env.DB_HOST,
+      hasSOLANA_RPC_URL: !!process.env.SOLANA_RPC_URL,
+    });
+    
     const expressApp = express();
-    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp));
+    const app = await NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
+      logger: ['error', 'warn', 'log'],
+    });
 
     // Enable CORS for frontend - CRITICAL for Vercel
     const allowedOrigins = process.env.FRONTEND_URL
@@ -109,7 +117,13 @@ async function createApp() {
     });
 
     // Initialize app (DO NOT call listen() - this is serverless!)
-    await app.init();
+    // Use a timeout to prevent hanging on database connection
+    const initPromise = app.init();
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('App initialization timeout')), 10000)
+    );
+    
+    await Promise.race([initPromise, timeoutPromise]);
     cachedApp = expressApp;
     appInitializing = false;
     
@@ -119,7 +133,9 @@ async function createApp() {
     appInitializing = false;
     initError = error;
     console.error('[Serverless] Failed to initialize app:', error);
+    console.error('[Serverless] Error message:', error?.message);
     console.error('[Serverless] Error stack:', error?.stack);
+    // Don't throw - cache the error so we can return a proper response
     throw error;
   }
 }
@@ -197,14 +213,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('[Handler Error]', error);
-    console.error('[Handler Error Stack]', error?.stack);
+    console.error('[Handler Error] Message:', error?.message);
+    console.error('[Handler Error] Stack:', error?.stack);
+    console.error('[Handler Error] Name:', error?.name);
+    
     // CORS headers already set at the beginning
     if (!res.headersSent) {
-      res.status(500).json({ 
+      const errorResponse: any = {
         error: error?.message || 'Internal server error',
         handler: 'error',
-        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
-      });
+      };
+      
+      // Include more details in development or if it's an initialization error
+      if (process.env.NODE_ENV !== 'production' || error?.message?.includes('initialization')) {
+        errorResponse.details = error?.stack;
+        errorResponse.name = error?.name;
+      }
+      
+      res.status(500).json(errorResponse);
     }
   }
 }

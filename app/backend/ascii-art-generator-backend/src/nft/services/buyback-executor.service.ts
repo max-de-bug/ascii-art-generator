@@ -82,16 +82,29 @@ export class BuybackExecutorService {
 
     // Load IDL dynamically
     if (!IDL) {
-      const idlPath = path.join(
-        __dirname,
-        '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json',
-      );
+      const idlPaths = [
+        path.join(__dirname, '../../../../../Components/smartcontracts/ascii/target/idl/ascii.json'),
+        path.join(__dirname, '../../../Components/smartcontracts/ascii/target/idl/ascii.json'),
+        process.env.IDL_PATH || '',
+      ].filter(Boolean) as string[];
 
-      if (!fs.existsSync(idlPath)) {
-        throw new Error(
-          `IDL not found at ${idlPath}. Please run 'anchor build' first.`,
-        );
+      let foundIdlPath = '';
+      for (const testPath of idlPaths) {
+        if (testPath && fs.existsSync(testPath)) {
+          foundIdlPath = testPath;
+          break;
+        }
       }
+
+      if (!foundIdlPath) {
+        this.logger.warn(
+          `IDL not found. Buyback functionality may be limited. Tried paths: ${idlPaths.join(', ')}`,
+        );
+        // Don't throw - allow service to continue without IDL
+        return null;
+      }
+
+      const idlPath = foundIdlPath;
 
       IDL = JSON.parse(fs.readFileSync(idlPath, 'utf-8'));
     }
