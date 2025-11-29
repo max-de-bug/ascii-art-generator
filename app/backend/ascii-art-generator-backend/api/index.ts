@@ -122,17 +122,23 @@ async function createApp() {
   }
 }
 
+// Main handler - MUST be default export for Vercel
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ALWAYS set CORS headers FIRST - before ANY other processing
-  // Set CORS headers for ALL requests, regardless of origin
-  const origin = req.headers.origin || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
+  // This is CRITICAL - CORS headers must be set for every response
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
   res.setHeader('Access-Control-Max-Age', '86400');
   
-  console.log(`[Handler] ${req.method} ${req.url} from origin: ${req.headers.origin}`);
+  console.log(`[Handler] ${req.method} ${req.url} from origin: ${origin || 'none'}`);
+  console.log(`[Handler] Request received at: ${new Date().toISOString()}`);
   
   // Handle OPTIONS preflight requests immediately
   if (req.method === 'OPTIONS') {
@@ -141,13 +147,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   
   // Simple health check route (before NestJS initialization)
-  if (req.url === '/health' || req.url?.endsWith('/health')) {
+  // This helps verify the handler is working
+  if (req.url === '/health' || req.url?.endsWith('/health') || req.url === '/api/health') {
     console.log('[Handler] Health check requested');
     return res.status(200).json({ 
       status: 'ok', 
       handler: 'working',
       timestamp: new Date().toISOString(),
-      url: req.url
+      url: req.url,
+      method: req.method
     });
   }
 
@@ -207,7 +215,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         error: error?.message || 'Internal server error',
         handler: 'error',
         details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
-    });
+      });
+    }
   }
 }
 
