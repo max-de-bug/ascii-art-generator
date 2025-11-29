@@ -11,29 +11,55 @@ async function bootstrap() {
     ? process.env.FRONTEND_URL.split(',').map((url) => url.trim())
     : ['http://localhost:3000'];
   
+  console.log(`[CORS] Allowed origins from FRONTEND_URL: ${allowedOrigins.join(', ')}`);
+  console.log(`[CORS] NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+  
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) {
+        console.log('[CORS] Allowing request with no origin');
         return callback(null, true);
       }
       
+      console.log(`[CORS] Request from origin: ${origin}`);
+      
       // Check if origin is in the allowed list
       if (allowedOrigins.includes(origin)) {
+        console.log(`[CORS] ✓ Origin allowed (in FRONTEND_URL list)`);
         return callback(null, true);
       }
       
       // In production, automatically allow any Vercel deployment
-      if (process.env.NODE_ENV === 'production' && origin.endsWith('.vercel.app')) {
+      if (origin.endsWith('.vercel.app')) {
+        console.log(`[CORS] ✓ Origin allowed (Vercel deployment)`);
+        return callback(null, true);
+      }
+      
+      // Allow localhost in development
+      if (process.env.NODE_ENV !== 'production' && 
+          (origin.startsWith('http://localhost:') || origin.startsWith('http://127.0.0.1:'))) {
+        console.log(`[CORS] ✓ Origin allowed (localhost in development)`);
         return callback(null, true);
       }
       
       // Reject all other origins
-      callback(new Error('Not allowed by CORS'));
+      console.log(`[CORS] ✗ Origin rejected: ${origin}`);
+      callback(new Error(`CORS: Origin ${origin} is not allowed`));
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: [
+      'Content-Type', 
+      'Authorization', 
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'Access-Control-Request-Method',
+      'Access-Control-Request-Headers'
+    ],
+    exposedHeaders: ['Content-Length', 'Content-Type'],
+    maxAge: 86400, // 24 hours
   });
 
   const port = process.env.PORT || 3001;

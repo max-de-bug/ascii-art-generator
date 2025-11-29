@@ -2,6 +2,10 @@
  * API client for backend communication
  */
 
+// API Base URL
+// IMPORTANT: In production, you MUST set NEXT_PUBLIC_API_URL in Vercel environment variables
+// Go to: Vercel Dashboard → Your Project → Settings → Environment Variables
+// Add: NEXT_PUBLIC_API_URL = https://your-backend-url.vercel.app
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export interface NFT {
