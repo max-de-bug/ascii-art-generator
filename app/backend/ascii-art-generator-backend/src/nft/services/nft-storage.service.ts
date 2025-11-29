@@ -308,13 +308,13 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
       // Update user level within the same transaction
       if (nft.minter) {
         try {
-          this.logger.log(
-            `[NftStorage] Updating user level for minter: ${nft.minter}`,
-          );
-          await this.updateUserLevelInTransaction(queryRunner, nft.minter);
-          this.logger.log(
+        this.logger.log(
+          `[NftStorage] Updating user level for minter: ${nft.minter}`,
+        );
+        await this.updateUserLevelInTransaction(queryRunner, nft.minter);
+        this.logger.log(
             `[NftStorage] ✓ User level updated for minter: ${nft.minter}`,
-          );
+        );
         } catch (levelError: any) {
           this.logger.error(
             `[NftStorage] ✗ Failed to update user level for minter ${nft.minter}: ${levelError.message}`,

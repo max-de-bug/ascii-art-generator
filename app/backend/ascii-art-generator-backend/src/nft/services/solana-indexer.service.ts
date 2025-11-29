@@ -129,7 +129,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
       this.logger.error('[Indexer] Failed to load IDL dynamically', error);
       // Fallback to static import if dynamic import fails
       try {
-        this.eventParser.setIdl(idl as Idl, this.programId.toBase58());
+      this.eventParser.setIdl(idl as Idl, this.programId.toBase58());
         this.logger.warn('[Indexer] Using fallback static IDL import');
       } catch (fallbackError) {
         this.logger.error('[Indexer] Fallback IDL load also failed', fallbackError);

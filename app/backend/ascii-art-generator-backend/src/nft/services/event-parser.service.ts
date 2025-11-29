@@ -249,25 +249,25 @@ export class EventParserService {
       }
       
       // Extract name, symbol, uri from log if available
-      const nameMatch =
-        log.match(/Minted (?:and verified )?ASCII NFT: ([^(]+)/) ||
-        log.match(/Minted ASCII NFT: ([^(]+)/);
+        const nameMatch =
+          log.match(/Minted (?:and verified )?ASCII NFT: ([^(]+)/) ||
+          log.match(/Minted ASCII NFT: ([^(]+)/);
       if (nameMatch) {
         name = nameMatch[1].trim();
       }
-      const symbolMatch = log.match(/\(([^)]+)\)/);
+        const symbolMatch = log.match(/\(([^)]+)\)/);
       if (symbolMatch) {
         symbol = symbolMatch[1];
       }
-      const uriMatch = log.match(/URI: (.+)/);
+        const uriMatch = log.match(/URI: (.+)/);
       if (uriMatch) {
         uri = uriMatch[1];
       }
     }
 
-    // Get accounts from transaction to extract minter and mint
-    const accountKeys = transaction.transaction.message.accountKeys || [];
-    
+        // Get accounts from transaction to extract minter and mint
+        const accountKeys = transaction.transaction.message.accountKeys || [];
+
     // Get transaction signers - the first account is typically the payer/minter
     // For ParsedMessage, we can't access header, so we use the first account
     // In Solana transactions, the first account is almost always the fee payer/signer
@@ -277,7 +277,7 @@ export class EventParserService {
 
     // Mint account is usually in the instruction accounts
     // For mint_ascii_nft, the mint is typically at index 6 in the accounts array
-    let mint: string | null = null;
+        let mint: string | null = null;
 
     // Look for mint in instruction accounts (more reliable than balance checks)
     // Instruction accounts can be either PublicKey objects or indices into accountKeys
@@ -334,46 +334,46 @@ export class EventParserService {
 
     // Fallback: Check pre and post balances to find new accounts (the mint)
     if (!mint) {
-      const preBalances = transaction.meta?.preBalances || [];
-      const postBalances = transaction.meta?.postBalances || [];
+        const preBalances = transaction.meta?.preBalances || [];
+        const postBalances = transaction.meta?.postBalances || [];
 
-      for (let i = 0; i < accountKeys.length; i++) {
-        const account = accountKeys[i];
-        // New accounts have 0 pre-balance and non-zero post-balance
-        if (preBalances[i] === 0 && postBalances[i] > 0) {
+        for (let i = 0; i < accountKeys.length; i++) {
+          const account = accountKeys[i];
+          // New accounts have 0 pre-balance and non-zero post-balance
+          if (preBalances[i] === 0 && postBalances[i] > 0) {
           const potentialMint = account.pubkey?.toString() || account.toString();
           // Skip system accounts and known program accounts
           if (!potentialMint.includes('11111111111111111111111111111111') && 
               !potentialMint.includes('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')) {
             mint = potentialMint;
             this.logger.log(`[EventParser] Found mint via balance check: ${mint}`);
-            break;
+                break;
+              }
+            }
           }
         }
-      }
-    }
 
     if (minter && mint) {
-      const timestamp = transaction.blockTime
-        ? transaction.blockTime
-        : Math.floor(Date.now() / 1000);
+          const timestamp = transaction.blockTime
+            ? transaction.blockTime
+            : Math.floor(Date.now() / 1000);
 
-      this.logger.log(
-        `[EventParser] ✓ Parsed MintEvent from logs: ${name} (${mint}) minted by ${minter}`,
-      );
+          this.logger.log(
+            `[EventParser] ✓ Parsed MintEvent from logs: ${name} (${mint}) minted by ${minter}`,
+          );
 
-      return {
-        minter,
-        mint,
-        name,
-        symbol,
-        uri,
-        timestamp,
-      };
-    } else {
-      this.logger.warn(
+          return {
+            minter,
+            mint,
+            name,
+            symbol,
+            uri,
+            timestamp,
+          };
+        } else {
+          this.logger.warn(
         `[EventParser] Could not extract all required fields. minter: ${minter}, mint: ${mint}`,
-      );
+          );
     }
 
     return null;
