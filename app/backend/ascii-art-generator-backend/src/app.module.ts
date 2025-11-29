@@ -9,6 +9,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { HealthModule } from './health/health.module';
+import { NftModule } from './nft/nft.module';
 import solanaConfig from './config/solana.config';
 import buybackConfig from './config/buyback.config';
 import throttlerConfig from './config/throttler.config';
@@ -60,6 +61,7 @@ import { BuybackEvent } from './nft/entities/buyback-event.entity';
       },
     }),
     HealthModule,
+    NftModule,
   ],
   controllers: [AppController],
   providers: [
