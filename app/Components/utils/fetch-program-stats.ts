@@ -39,6 +39,8 @@ export async function fetchProgramStats(
       }
       // Try to import IDL - use relative path that webpack can resolve at build time
       // Using relative path instead of @ alias for better webpack compatibility
+      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+      // @ts-ignore - JSON module import path resolution
       const idlModule = await import(
         "../smartcontracts/ascii/target/idl/ascii.json"
       ).catch(() => {
