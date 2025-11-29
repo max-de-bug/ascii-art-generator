@@ -30,9 +30,15 @@ async function bootstrap() {
         return callback(null, true);
       }
       
-      // In production, automatically allow any Vercel deployment
+      // Automatically allow any Vercel deployment (both production and preview)
       if (origin.endsWith('.vercel.app')) {
         console.log(`[CORS] ✓ Origin allowed (Vercel deployment)`);
+        return callback(null, true);
+      }
+      
+      // Also allow custom domains that might be used
+      if (origin.includes('vercel.app') || origin.includes('vercel.com')) {
+        console.log(`[CORS] ✓ Origin allowed (Vercel domain)`);
         return callback(null, true);
       }
       
