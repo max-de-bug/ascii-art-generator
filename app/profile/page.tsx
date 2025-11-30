@@ -57,8 +57,10 @@ export default function ProfilePage() {
     queryKey: ["userLevel", publicKey?.toString()],
     queryFn: async () => await getUserLevel(publicKey!.toString()),
     enabled: !!connected && !!publicKey && mounted,
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 5 * 1000, // Reduced to 5s for faster updates
+    refetchInterval: 5 * 1000, // Reduced to 15s to catch updates faster
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   const nfts = profile?.nfts || [];

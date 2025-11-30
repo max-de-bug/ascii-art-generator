@@ -45,7 +45,7 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
   // Indexer configuration
   private readonly POLLING_INTERVAL_MS = 30000; // Poll every 30 seconds
   private readonly BACKFILL_LIMIT = 20; // Process last 20 transactions on startup (reduced to avoid rate limits)
-  private readonly POLL_LIMIT = 5; // Poll last 5 transactions (reduced to avoid rate limits)
+  private readonly POLL_LIMIT = 20; // Poll last 20 transactions (increased from 5 to catch more burns)
   private readonly MAX_RETRIES = 5; // Max retry attempts for RPC calls (increased for 429 handling)
   private readonly RETRY_DELAY_MS = 2000; // Initial retry delay (increased for rate limit handling)
   private readonly MAX_CONCURRENT_PROCESSING = 3; // Max concurrent transaction processing (reduced to avoid rate limits)

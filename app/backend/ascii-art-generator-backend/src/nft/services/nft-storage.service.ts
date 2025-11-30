@@ -28,9 +28,11 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(NftStorageService.name);
   private connection: Connection;
   private cleanupIntervalId: NodeJS.Timeout | null = null;
-  private readonly CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // Cleanup every 24 hours (less frequent)
+  private readonly CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // Cleanup every 1 hour (reduced from 24h for faster burn detection)
   private readonly BATCH_SIZE = 50; // Process 50 NFTs at a time to avoid rate limits
-  private readonly VERIFICATION_AGE_DAYS = 7; // Only check NFTs that haven't been verified in 7+ days
+  private readonly VERIFICATION_AGE_DAYS = 1; // Only check NFTs that haven't been verified in 1+ days (reduced from 7 for faster detection)
+  private readonly CONCURRENT_OWNERSHIP_CHECKS = 10; // Max concurrent RPC calls to avoid rate limits (reduced from 50)
+  private readonly RPC_DELAY_MS = 50; // Delay between RPC calls to respect rate limits
 
   constructor(
     @InjectRepository(NFT)
@@ -157,52 +159,74 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
           `[NftStorage] Checking batch of ${nfts.length} NFTs (offset: ${offset}, older than ${this.VERIFICATION_AGE_DAYS} days)`,
         );
 
-        // Check ownership for each NFT in the batch
-        const ownershipChecks = await Promise.all(
-          nfts.map(async (nft) => {
-            const isOwned = await this.isNftOwnedByWallet(nft.mint, nft.minter);
-            // Update the NFT's updatedAt timestamp to mark it as verified
-            // This prevents checking it again until VERIFICATION_AGE_DAYS passes
-            if (isOwned) {
-              nft.updatedAt = new Date();
-              await this.nftRepository.save(nft);
-            }
-            return { nft, isOwned };
-          }),
-        );
+        // Check ownership for each NFT in the batch with concurrency limit
+        // Process in smaller chunks to avoid RPC rate limits
+        const ownershipChecks: Array<{ nft: NFT; isOwned: boolean }> = [];
+        for (let i = 0; i < nfts.length; i += this.CONCURRENT_OWNERSHIP_CHECKS) {
+          const chunk = nfts.slice(i, i + this.CONCURRENT_OWNERSHIP_CHECKS);
+          const chunkChecks = await Promise.all(
+            chunk.map(async (nft) => {
+              // Add small delay between RPC calls to respect rate limits
+              if (i > 0 || chunk.indexOf(nft) > 0) {
+                await new Promise((resolve) => setTimeout(resolve, this.RPC_DELAY_MS));
+              }
+              const isOwned = await this.isNftOwnedByWallet(nft.mint, nft.minter);
+              // Update the NFT's updatedAt timestamp to mark it as verified
+              // This prevents checking it again until VERIFICATION_AGE_DAYS passes
+              if (isOwned) {
+                nft.updatedAt = new Date();
+                await this.nftRepository.save(nft);
+              }
+              return { nft, isOwned };
+            }),
+          );
+          ownershipChecks.push(...chunkChecks);
+          
+          // Add delay between chunks to avoid rate limits
+          if (i + this.CONCURRENT_OWNERSHIP_CHECKS < nfts.length) {
+            await new Promise((resolve) => setTimeout(resolve, this.RPC_DELAY_MS * 2));
+          }
+        }
 
         // Remove NFTs that are no longer owned
         const toRemove = ownershipChecks.filter((check) => !check.isOwned);
 
         if (toRemove.length > 0) {
-          // Delete each NFT individually
-          for (const check of toRemove) {
-            await this.nftRepository.remove(check.nft);
-            this.logger.log(
-              `[NftStorage] Removed burned NFT: ${check.nft.mint} (${check.nft.name}) from minter: ${check.nft.minter}`,
-            );
-          }
+          // Batch delete NFTs for better performance
+          const nftIdsToRemove = toRemove.map((check) => check.nft.id);
+          await this.nftRepository.delete(nftIdsToRemove);
+          this.logger.log(
+            `[NftStorage] Removed ${toRemove.length} burned NFTs in batch`,
+          );
 
           totalRemoved += toRemove.length;
 
-          // Update user levels for affected minters
+          // Update user levels for affected minters (batch process)
           // Use a database transaction to ensure atomicity
           const affectedMinters = new Set(
             toRemove.map((check) => check.nft.minter),
           );
           
-          for (const minter of affectedMinters) {
-            try {
-              await this.recalculateUserLevel(minter);
-              this.logger.log(
-                `[NftStorage] ✓ Updated user level for minter: ${minter} after NFT removal`,
-              );
-            } catch (error) {
-              this.logger.warn(
-                `[NftStorage] Failed to update user level for minter: ${minter}`,
-                error,
-              );
-            }
+          // Process user level updates in parallel (with limit to avoid DB overload)
+          const minterArray = Array.from(affectedMinters);
+          const levelUpdateChunkSize = 5; // Update 5 users at a time
+          for (let i = 0; i < minterArray.length; i += levelUpdateChunkSize) {
+            const minterChunk = minterArray.slice(i, i + levelUpdateChunkSize);
+            await Promise.all(
+              minterChunk.map(async (minter) => {
+                try {
+                  await this.recalculateUserLevel(minter);
+                  this.logger.log(
+                    `[NftStorage] ✓ Updated user level for minter: ${minter} after NFT removal`,
+                  );
+                } catch (error) {
+                  this.logger.warn(
+                    `[NftStorage] Failed to update user level for minter: ${minter}`,
+                    error,
+                  );
+                }
+              }),
+            );
           }
         }
 
@@ -678,8 +702,17 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
       where: { minter: walletAddress },
     });
 
-    // Calculate level based on total mints
-    const levelData = calculateLevel(totalMints);
+    // Calculate level directly: every 5 mints = 1 level, up to level 40
+    // This matches the calculation in updateUserLevelInTransaction
+    const level = Math.min(Math.floor(totalMints / 5) + 1, 40);
+    const experience = totalMints % 5; // Mints needed for next level (0-4)
+    const nextLevelMints = 5 - experience; // Mints needed to reach next level
+    
+    const levelData = {
+      level,
+      experience,
+      nextLevelMints,
+    };
 
     // Find or create user level
     let userLevel = await this.userLevelRepository.findOne({
