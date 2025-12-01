@@ -257,6 +257,66 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Fetch URI from on-chain Metaplex Token Metadata
+   */
+  private async fetchUriFromOnChainMetadata(mint: string): Promise<string | null> {
+    if (!this.connection) {
+      this.logger.warn('[NftStorage] Solana connection not available for fetching on-chain metadata');
+      return null;
+    }
+
+    try {
+      const mintPubkey = new PublicKey(mint);
+      
+      // Metaplex Token Metadata Program ID
+      const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+      
+      // Derive the metadata PDA (Program Derived Address)
+      const [metadataPDA] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from('metadata'),
+          TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+          mintPubkey.toBuffer(),
+        ],
+        TOKEN_METADATA_PROGRAM_ID,
+      );
+
+      // Fetch the metadata account
+      const metadataAccount = await this.connection.getAccountInfo(metadataPDA);
+      
+      if (!metadataAccount) {
+        this.logger.warn(`[NftStorage] Metadata account not found for mint ${mint}`);
+        return null;
+      }
+
+      // Parse the metadata account data
+      const data = metadataAccount.data;
+      let offset = 1 + 32 + 32; // Skip key, update_authority, mint
+      
+      // Skip name (4 bytes length + string)
+      const nameLength = data.readUInt32LE(offset);
+      offset += 4 + nameLength;
+      
+      // Skip symbol (4 bytes length + string)
+      const symbolLength = data.readUInt32LE(offset);
+      offset += 4 + symbolLength;
+      
+      // Read URI (4 bytes length + string)
+      const uriLength = data.readUInt32LE(offset);
+      offset += 4;
+      const uri = data.slice(offset, offset + uriLength).toString('utf8');
+      
+      this.logger.log(`[NftStorage] Fetched URI from on-chain metadata for mint ${mint}: ${uri.substring(0, 50)}...`);
+      return uri;
+    } catch (error: any) {
+      this.logger.warn(
+        `[NftStorage] Error fetching URI from on-chain metadata for mint ${mint}: ${error.message}`,
+      );
+      return null;
+    }
+  }
+
+  /**
    * Save an NFT
    * Uses database transaction to ensure atomicity
    */
@@ -264,6 +324,15 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
     if (!nft.mint) {
       throw new Error('NFT mint address is required');
     }
+
+    // Ensure URI is at least an empty string (not undefined/null)
+    // Don't try to fetch URI from on-chain metadata during save - it can be fetched later
+    // This prevents any delays or errors from blocking the NFT save
+    if (!nft.uri) {
+      nft.uri = '';
+    }
+    
+    this.logger.log(`[NftStorage] Preparing to save NFT: ${nft.mint}, URI will be fetched later if needed`);
 
     // Use database transaction to ensure atomicity
     const queryRunner = this.dataSource.createQueryRunner();
@@ -320,60 +389,133 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
         return existing;
       }
 
+      // Validate required fields before saving
+      if (!nft.mint || !nft.minter || !nft.name || !nft.symbol || !nft.transactionSignature || nft.slot === undefined || nft.timestamp === undefined) {
+        const missingFields: string[] = [];
+        if (!nft.mint) missingFields.push('mint');
+        if (!nft.minter) missingFields.push('minter');
+        if (!nft.name) missingFields.push('name');
+        if (!nft.symbol) missingFields.push('symbol');
+        if (!nft.transactionSignature) missingFields.push('transactionSignature');
+        if (nft.slot === undefined) missingFields.push('slot');
+        if (nft.timestamp === undefined) missingFields.push('timestamp');
+        const errorMsg = `Missing required fields for NFT: ${missingFields.join(', ')}. NFT data: ${JSON.stringify({
+          mint: nft.mint,
+          minter: nft.minter,
+          name: nft.name,
+          symbol: nft.symbol,
+          transactionSignature: nft.transactionSignature,
+          slot: nft.slot,
+          timestamp: nft.timestamp,
+        })}`;
+        this.logger.error(`[NftStorage] ${errorMsg}`);
+        throw new Error(errorMsg);
+      }
+
+      // Ensure URI is set (even if empty)
+      if (!nft.uri) {
+        nft.uri = '';
+      }
+
       // Save NFT (timestamps are handled by @CreateDateColumn and @UpdateDateColumn)
       this.logger.log(
-        `[NftStorage] Saving new NFT: ${nft.mint} for minter: ${nft.minter}`,
+        `[NftStorage] Saving new NFT: ${nft.mint} for minter: ${nft.minter}, name: ${nft.name}, uri: ${nft.uri ? nft.uri.substring(0, 50) + '...' : 'empty'}`,
       );
+      
+      this.logger.log(
+        `[NftStorage] Attempting to save NFT with data: mint=${nft.mint}, minter=${nft.minter}, name=${nft.name}, symbol=${nft.symbol}, uri=${nft.uri ? 'present' : 'empty'}, signature=${nft.transactionSignature}, slot=${nft.slot}, timestamp=${nft.timestamp}`,
+      );
+      
       const savedNft = await queryRunner.manager.save(NFT, nft);
       this.logger.log(
         `[NftStorage] NFT saved with ID: ${savedNft.id}, mint: ${savedNft.mint}`,
       );
 
-      // Update user level within the same transaction
+      // Commit transaction FIRST to ensure NFT is saved
+      await queryRunner.commitTransaction();
+      this.logger.log(
+        `[NftStorage] ✓ Transaction committed successfully for NFT: ${nft.mint}`,
+      );
+
+      // Release query runner after successful commit
+      await queryRunner.release();
+
+      // Update user level AFTER committing the NFT (non-blocking)
+      // This ensures the NFT is saved even if level update fails
       if (nft.minter) {
-        try {
-        this.logger.log(
-          `[NftStorage] Updating user level for minter: ${nft.minter}`,
-        );
-        await this.updateUserLevelInTransaction(queryRunner, nft.minter);
-        this.logger.log(
-            `[NftStorage] ✓ User level updated for minter: ${nft.minter}`,
-        );
-        } catch (levelError: any) {
+        // Update level asynchronously (don't await) to not block the response
+        this.recalculateUserLevel(nft.minter).catch((levelError: any) => {
           this.logger.error(
             `[NftStorage] ✗ Failed to update user level for minter ${nft.minter}: ${levelError.message}`,
             levelError.stack,
           );
-          // Re-throw to rollback the transaction - we want atomicity
-          throw new Error(`Failed to update user level: ${levelError.message}`);
-        }
+          // Don't throw - NFT is already saved, level can be updated later
+          // The level will be recalculated on next profile view or cleanup
+        });
       }
 
-      // Commit transaction
-      await queryRunner.commitTransaction();
-      this.logger.log(
-        `[NftStorage] ✓ Successfully saved NFT: ${nft.mint} for minter: ${nft.minter}`,
-      );
-
       return savedNft;
-    } catch (error) {
-      // Rollback transaction on error
-      await queryRunner.rollbackTransaction();
-      this.logger.error(`Error saving NFT ${nft.mint}`, error);
+    } catch (error: any) {
+      // Rollback transaction on error (outer catch for transaction-level errors)
+      if (queryRunner && !queryRunner.isReleased) {
+        try {
+          await queryRunner.rollbackTransaction();
+          this.logger.log(`[NftStorage] Transaction rolled back for NFT: ${nft.mint}`);
+        } catch (rollbackError: any) {
+          this.logger.error(`[NftStorage] Error during rollback: ${rollbackError.message}`);
+        }
+        try {
+          await queryRunner.release();
+        } catch (releaseError: any) {
+          this.logger.error(`[NftStorage] Error releasing query runner: ${releaseError.message}`);
+        }
+      }
+      this.logger.error(
+        `[NftStorage] ✗ Error saving NFT ${nft.mint}: ${error.message}`,
+        error.stack,
+      );
+      this.logger.error(
+        `[NftStorage] NFT data that failed to save: ${JSON.stringify({
+          mint: nft.mint,
+          minter: nft.minter,
+          name: nft.name,
+          symbol: nft.symbol,
+          uri: nft.uri ? 'present' : 'empty',
+          transactionSignature: nft.transactionSignature,
+          slot: nft.slot,
+          timestamp: nft.timestamp,
+        })}`,
+      );
       throw error;
-    } finally {
-      // Release query runner
-      await queryRunner.release();
     }
   }
 
   /**
    * Get NFT by mint address
+   * Fetches URI from on-chain metadata if missing
    */
   async getNftByMint(mint: string): Promise<NFT | null> {
-    return this.nftRepository.findOne({
+    const nft = await this.nftRepository.findOne({
       where: { mint },
     });
+
+    // If NFT exists but URI is empty, try to fetch from on-chain
+    if (nft && (!nft.uri || nft.uri.trim() === '')) {
+      this.logger.log(`[NftStorage] NFT ${mint} has empty URI, fetching from on-chain metadata...`);
+      try {
+        const uri = await this.fetchUriFromOnChainMetadata(mint);
+        if (uri) {
+          // Update the NFT with the fetched URI
+          nft.uri = uri;
+          await this.nftRepository.update({ mint }, { uri });
+          this.logger.log(`[NftStorage] ✓ Updated NFT ${mint} with URI from on-chain metadata`);
+        }
+      } catch (error: any) {
+        this.logger.warn(`[NftStorage] Error fetching URI for NFT ${mint}: ${error.message}`);
+      }
+    }
+
+    return nft;
   }
 
   /**
@@ -594,6 +736,26 @@ export class NftStorageService implements OnModuleInit, OnModuleDestroy {
 
     if (allNfts.length === 0) {
       return [];
+    }
+
+    // Fetch URIs from on-chain metadata for NFTs with empty URIs
+    const nftsNeedingUri = allNfts.filter(nft => !nft.uri || nft.uri.trim() === '');
+    if (nftsNeedingUri.length > 0) {
+      this.logger.log(`[NftStorage] Found ${nftsNeedingUri.length} NFTs with empty URIs, fetching from on-chain metadata...`);
+      for (const nft of nftsNeedingUri) {
+        try {
+          const uri = await this.fetchUriFromOnChainMetadata(nft.mint);
+          if (uri) {
+            nft.uri = uri;
+            // Update in database asynchronously (don't block the response)
+            this.nftRepository.update({ mint: nft.mint }, { uri }).catch(err => {
+              this.logger.warn(`[NftStorage] Failed to update URI for NFT ${nft.mint}: ${err.message}`);
+            });
+          }
+        } catch (error: any) {
+          this.logger.warn(`[NftStorage] Error fetching URI for NFT ${nft.mint}: ${error.message}`);
+        }
+      }
     }
 
     // Verify ownership for each NFT individually (more accurate than getting all token accounts)

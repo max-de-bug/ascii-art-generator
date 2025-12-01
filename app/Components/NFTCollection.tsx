@@ -4,7 +4,7 @@ import { ImageIcon } from "lucide-react";
 import Link from "next/link";
 import { NFT } from "../utils/api";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 
 interface NFTMetadata {
     name: string;
@@ -181,8 +181,8 @@ const normalizeImageUrl = (imageUrl: string, preferredGateway?: string): string 
 
 // Component to fetch and display NFT image using React Query
 const NFTImage = ({ uri, name }: { uri: string; name: string }) => {
-    const [imageError, setImageError] = useState(false);
-    const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
+    // Track which gateway we're currently trying (for fallback on error)
+    const [gatewayIndex, setGatewayIndex] = useState(0);
     
     const { data: metadata, isLoading, error } = useQuery<NFTMetadata>({
         queryKey: ["nftMetadata", uri],
@@ -192,53 +192,32 @@ const NFTImage = ({ uri, name }: { uri: string; name: string }) => {
         retry: 1, // Only retry once since we handle fallbacks internally
     });
 
-    // Update image URL when metadata loads
-    useEffect(() => {
-        if (metadata?.image) {
-            // Extract the gateway that was used to fetch metadata (if available)
-            // For now, start with first gateway and let error handler try others
-            const normalizedUrl = normalizeImageUrl(metadata.image);
-            console.log(`[NFTImage] Loading image for ${name} from: ${normalizedUrl}`);
-            setCurrentImageUrl(normalizedUrl);
-            setImageError(false);
-        }
-    }, [metadata?.image, name]);
+    // Compute image URL directly from metadata (React Query handles the data)
+    const imageUrl = useMemo(() => {
+        if (!metadata?.image) return null;
+        return normalizeImageUrl(metadata.image, IPFS_GATEWAYS[gatewayIndex]);
+    }, [metadata?.image, gatewayIndex]);
 
     // Try next gateway if image fails to load
     const handleImageError = () => {
         if (!metadata?.image) {
             console.warn(`[NFTImage] No image URL in metadata for ${name}`);
-            setImageError(true);
-            return;
-        }
-        
-        if (imageError) {
-            // Already tried all gateways
-            console.warn(`[NFTImage] All gateways failed for ${name}`);
             return;
         }
         
         const imageHash = extractIPFSHash(metadata.image);
-        if (imageHash && currentImageUrl) {
-            // Find current gateway index
-            const currentGatewayIndex = IPFS_GATEWAYS.findIndex(gateway => 
-                currentImageUrl.includes(gateway)
-            );
-            
-            // Try next gateway
-            if (currentGatewayIndex >= 0 && currentGatewayIndex < IPFS_GATEWAYS.length - 1) {
-                const nextGateway = IPFS_GATEWAYS[currentGatewayIndex + 1];
-                const nextUrl = `${nextGateway}/${imageHash}`;
-                console.log(`[NFTImage] Gateway ${IPFS_GATEWAYS[currentGatewayIndex]} failed, trying ${nextGateway} for ${name}`);
-                setCurrentImageUrl(nextUrl);
-                setImageError(false);
-            } else {
-                console.warn(`[NFTImage] All gateways exhausted for ${name}`);
-                setImageError(true);
-            }
-        } else {
+        if (!imageHash) {
             console.warn(`[NFTImage] Could not extract IPFS hash from image URL: ${metadata.image}`);
-            setImageError(true);
+            return;
+        }
+        
+        // Try next gateway
+        if (gatewayIndex < IPFS_GATEWAYS.length - 1) {
+            const nextIndex = gatewayIndex + 1;
+            console.log(`[NFTImage] Gateway ${IPFS_GATEWAYS[gatewayIndex]} failed, trying ${IPFS_GATEWAYS[nextIndex]} for ${name}`);
+            setGatewayIndex(nextIndex);
+        } else {
+            console.warn(`[NFTImage] All gateways exhausted for ${name}`);
         }
     };
 
@@ -250,7 +229,7 @@ const NFTImage = ({ uri, name }: { uri: string; name: string }) => {
         );
     }
 
-    if (error || !metadata?.image) {
+    if (error || !metadata) {
         return (
             <div className="aspect-square bg-muted rounded-lg mb-3 flex items-center justify-center">
                 <ImageIcon className="h-12 w-12 text-muted-foreground" />
@@ -258,7 +237,7 @@ const NFTImage = ({ uri, name }: { uri: string; name: string }) => {
         );
     }
 
-    if (imageError || !currentImageUrl) {
+    if (!imageUrl) {
         return (
             <div className="aspect-square bg-muted rounded-lg mb-3 flex items-center justify-center">
                 <ImageIcon className="h-12 w-12 text-muted-foreground" />
@@ -270,9 +249,9 @@ const NFTImage = ({ uri, name }: { uri: string; name: string }) => {
         <div className="aspect-square bg-muted rounded-lg mb-3 overflow-hidden relative">
             {/* Use regular img tag for better error handling with IPFS */}
             <img
-                src={currentImageUrl}
+                src={imageUrl}
                 alt={name}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-cover"
                 onError={handleImageError}
                 loading="lazy"
             />

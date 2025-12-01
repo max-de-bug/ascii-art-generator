@@ -6,7 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Wallet} from "lucide-react";
-import { getUserProfile, getUserShardStatus, getUserLevel, type UserProfile, type UserShardStatus, type UserLevel } from "../utils/api";
+import { getUserProfile, getUserShardStatus, type UserProfile, type UserShardStatus, type UserLevel } from "../utils/api";
 import { UserLevelCard } from "../Components/UserLevelCard";
 import { NFTCollection } from "../Components/NFTCollection";
 import { WalletAddressCard } from "../Components/walletAddressCard";
@@ -20,7 +20,7 @@ export default function ProfilePage() {
     setMounted(true);
   }, []);
 
-  // Fetch user profile for NFTs
+  // Fetch user profile for NFTs (includes userLevel, so no separate call needed)
   const {
     data: profile,
     isLoading: isLoadingProfile,
@@ -29,47 +29,35 @@ export default function ProfilePage() {
     queryKey: ["userProfile", publicKey?.toString()],
     queryFn: () => getUserProfile(publicKey!.toString()),
     enabled: !!connected && !!publicKey && mounted,
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
+    staleTime: 3 * 1000, // Reduced to 3s for faster updates
+    refetchInterval: 10 * 1000, // Reduced to 10s to catch updates faster
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch when component mounts
+    gcTime: 5 * 60 * 1000, // Keep cached data for 5 minutes
   });
 
-  // Fetch user shard status
+  // Fetch user shard status (fetched in parallel with profile)
   const {
     data: shardStatus,
     isLoading: isLoadingShards,
     error: shardError,
-    refetch: refetchShards,
   } = useQuery<UserShardStatus>({
     queryKey: ["userShardStatus", publicKey?.toString()],
     queryFn: () => getUserShardStatus(publicKey!.toString()),
     enabled: !!connected && !!publicKey && mounted,
-    staleTime: 30 * 1000,
-    refetchInterval: 60 * 1000,
-  });
-
-  // Fetch user level
-  const {
-    data: userLevel,
-    isLoading: isLoadingLevel,
-    error: levelError,
-    refetch: refetchLevel,
-  } = useQuery<UserLevel | null>({
-    queryKey: ["userLevel", publicKey?.toString()],
-    queryFn: async () => await getUserLevel(publicKey!.toString()),
-    enabled: !!connected && !!publicKey && mounted,
-    staleTime: 5 * 1000, // Reduced to 5s for faster updates
-    refetchInterval: 5 * 1000, // Reduced to 15s to catch updates faster
+    staleTime: 3 * 1000, // Reduced to 3s for faster updates
+    refetchInterval: 10 * 1000, // Reduced to 10s to catch updates faster
     refetchOnWindowFocus: true, // Refetch when user returns to tab
     refetchOnMount: true, // Always refetch when component mounts
+    gcTime: 5 * 60 * 1000, // Keep cached data for 5 minutes
   });
 
+  // Extract userLevel from profile (no separate API call needed)
+  const userLevel = profile?.userLevel || null;
+
   const nfts = profile?.nfts || [];
-  const isLoading = isLoadingProfile || isLoadingShards || isLoadingLevel;
-  const error = profileError || shardError || levelError;
-  const refetch = () => {
-    refetchShards();
-    refetchLevel();
-  };
+  const isLoading = isLoadingProfile || isLoadingShards;
+  const error = profileError || shardError;
 
   if (!mounted) {
     return (
@@ -111,11 +99,10 @@ export default function ProfilePage() {
 
               {/* User Shard Card */}
               <UserLevelCard 
-                isLoading={isLoadingShards || isLoadingLevel} 
+                isLoading={isLoadingShards || isLoadingProfile} 
                 shardStatus={shardStatus || null} 
-                level={userLevel || null}
+                level={userLevel}
                 error={error} 
-                refetch={refetch} 
               />
 
               {/* NFT Collection */}

@@ -486,7 +486,14 @@ export class SolanaIndexerService implements OnModuleInit, OnModuleDestroy {
               `[Indexer] ✗ Error saving NFT ${mintEvent.mint} to database: ${error.message}`,
               error.stack,
             );
-            throw error; // Re-throw other errors
+            this.logger.error(
+              `[Indexer] NFT data that failed: mint=${mintEvent.mint}, minter=${mintEvent.minter}, name=${mintEvent.name}, symbol=${mintEvent.symbol}, uri=${mintEvent.uri ? 'present' : 'empty'}, timestamp=${mintEvent.timestamp}`,
+            );
+            // Don't throw - log the error but continue processing other transactions
+            // This prevents one bad NFT from stopping the entire indexer
+            this.logger.warn(
+              `[Indexer] Continuing indexer despite error saving NFT ${mintEvent.mint}`,
+            );
           }
         }
         return;

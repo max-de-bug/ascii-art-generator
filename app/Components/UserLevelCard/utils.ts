@@ -9,15 +9,37 @@ export function calculateShardProgress(shardStatus: UserShardStatus | null): num
 
 /**
  * Calculate level progress percentage
+ * Progress is based on experience (mints in current level) vs total mints needed for next level
+ * 
+ * Formula: experience / (experience + nextLevelMints) * 100
+ * 
+ * Example:
+ * - 1 mint: experience=1, nextLevelMints=4 → 1/5 = 20%
+ * - 2 mints: experience=2, nextLevelMints=3 → 2/5 = 40%
+ * - 3 mints: experience=3, nextLevelMints=2 → 3/5 = 60%
+ * - 4 mints: experience=4, nextLevelMints=1 → 4/5 = 80%
+ * - 5 mints: experience=0, nextLevelMints=5 → 0/5 = 0% (level up!)
  */
 export function calculateLevelProgress(level: UserLevel | null): number {
   if (!level) return 0;
   
-  if (level.nextLevelMints > 0) {
-    return (level.experience / (level.experience + level.nextLevelMints)) * 100;
+  // If already at max level or nextLevelMints is 0, show 100%
+  if (level.nextLevelMints === 0) {
+    return 100;
   }
   
-  return level.nextLevelMints === 0 ? 100 : 0;
+  // Calculate progress: experience / (experience + nextLevelMints) * 100
+  // This shows how much of the current level is completed
+  const totalMintsForNextLevel = level.experience + level.nextLevelMints;
+  
+  if (totalMintsForNextLevel === 0) {
+    return 0;
+  }
+  
+  const progress = (level.experience / totalMintsForNextLevel) * 100;
+  
+  // Ensure progress is between 0 and 100
+  return Math.min(Math.max(progress, 0), 100);
 }
 
 /**

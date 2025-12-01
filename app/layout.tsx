@@ -37,7 +37,7 @@ const pressStart2P = Press_Start_2P({
 });
 
 export const metadata: Metadata = {
-  title: "ASCII Art generator",
+  title: "O.ASCII Art generator",
   description: "ASCII Art generator on solana",
   icons: {
     icon: [

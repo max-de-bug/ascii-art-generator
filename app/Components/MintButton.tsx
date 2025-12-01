@@ -3,7 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletIcon, Loader2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useAsciiStore } from "./store/ascii-store";
 import { toast } from "sonner";
 import { mintAsciiArtNFTAnchor } from "./utils/mint-nft-anchor";
@@ -17,6 +18,8 @@ export const MintButton = () => {
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const { network } = useNetwork();
+  const queryClient = useQueryClient();
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleMint = async () => {
     // Prevent action if already minting

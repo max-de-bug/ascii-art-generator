@@ -1,5 +1,7 @@
 import { Loader2, Sparkles } from "lucide-react"
+import { useMemo } from "react";
 import { UserLevel, UserShardStatus } from "../../utils/api";
+import { Progress } from "@/components/ui/progress";
 import {
   calculateShardProgress,
   calculateLevelProgress,
@@ -11,14 +13,10 @@ interface UserLevelCardProps {
     isLoading: boolean;
     shardStatus: UserShardStatus | null;
     error: Error | null;
-    refetch: () => void;
     level: UserLevel | null;
 }
 
-export const UserLevelCard = ( { isLoading, shardStatus, error, refetch, level }: UserLevelCardProps ) => {
-  const earnedShards = getEarnedShards(shardStatus);
-  const shardProgress = calculateShardProgress(shardStatus);
-  
+export const UserLevelCard = ( { isLoading, shardStatus, error, level }: UserLevelCardProps ) => {
   // Create default level when user has no NFTs (level 1, 0 mints)
   const defaultLevel: UserLevel = {
     walletAddress: '',
@@ -31,8 +29,13 @@ export const UserLevelCard = ( { isLoading, shardStatus, error, refetch, level }
   };
   
   const displayLevel = level || defaultLevel;
-  const levelProgress = calculateLevelProgress(displayLevel);
-  const nextShardInfo = calculateMintsToNextShard(shardStatus, displayLevel);
+  
+  // Memoize calculations to prevent unnecessary recalculations
+  // Use individual properties as dependencies to ensure recalculation when data changes
+  const earnedShards = useMemo(() => getEarnedShards(shardStatus), [shardStatus]);
+  const shardProgress = useMemo(() => calculateShardProgress(shardStatus), [shardStatus]);
+  const levelProgress = useMemo(() => calculateLevelProgress(displayLevel), [displayLevel]);
+  const nextShardInfo = useMemo(() => calculateMintsToNextShard(shardStatus, displayLevel), [shardStatus, displayLevel]);
 
   return (
     <>
@@ -41,7 +44,7 @@ export const UserLevelCard = ( { isLoading, shardStatus, error, refetch, level }
           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         </div>
       ) : shardStatus ? (
-        <div className="rounded-lg border border-border bg-card p-3">
+        <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center justify-between gap-4">
             {/* Left: Shards & Icon */}
             <div className="flex items-center gap-2.5">
@@ -88,16 +91,9 @@ export const UserLevelCard = ( { isLoading, shardStatus, error, refetch, level }
                       : `${shardStatus.shardsNeededForZenith} to ZENITH`}
                   </span>
                 </div>
-                <div className="w-full bg-muted rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full transition-all ${
-                      shardStatus.hasZenith ? 'bg-primary' : 'bg-primary'
-                    }`}
-                    style={{
-                      width: `${Math.min(shardProgress, 100)}%`,
-                    }}
-                  />
-                </div>
+                <Progress 
+                  value={Math.min(Math.max(shardProgress, 0), 100)} 
+                />
               </div>
 
               {/* Level Progress - Always shown, even with 0 NFTs */}
@@ -116,14 +112,10 @@ export const UserLevelCard = ( { isLoading, shardStatus, error, refetch, level }
                       : 'Max level'}
                   </span>
                 </div>
-                <div className="w-full bg-muted rounded-full h-1.5">
-                  <div
-                    className="h-1.5 rounded-full transition-all bg-secondary"
-                    style={{
-                      width: `${Math.min(levelProgress, 100)}%`,
-                    }}
-                  />
-                </div>
+                <Progress 
+                  value={Math.min(Math.max(levelProgress, 0), 100)} 
+                  className="h-2"
+                />
               </div>
             </div>
           </div>
@@ -133,19 +125,11 @@ export const UserLevelCard = ( { isLoading, shardStatus, error, refetch, level }
       {/* Error Message */}
       {error && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs text-destructive">
-              {error instanceof Error
-                ? error.message
-                : "Failed to load profile"}
-            </p>
-            <button
-              onClick={() => refetch()}
-              className="text-xs text-primary hover:underline whitespace-nowrap"
-            >
-              Retry
-            </button>
-          </div>
+          <p className="text-xs text-destructive">
+            {error instanceof Error
+              ? error.message
+              : "Failed to load profile. Data will refresh automatically."}
+          </p>
         </div>
       )}
     </>
