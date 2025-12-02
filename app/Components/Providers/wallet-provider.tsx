@@ -19,14 +19,20 @@ import { useNetwork } from "./network-provider";
 // Import wallet adapter CSS
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-// Suppress MetaMask errors (Solflare wallet includes optional MetaMask SDK)
+// Suppress MetaMask and duplicate wallet key errors
+// These are non-critical warnings from wallet adapter detecting multiple wallet sources
 if (typeof window !== 'undefined') {
   const originalError = console.error;
   console.error = (...args: any[]) => {
     const message = args[0]?.toString() || '';
     // Suppress MetaMask connection errors (non-critical for Solana wallets)
     if (message.includes('MetaMask') || message.includes('Failed to connect to MetaMask')) {
-      return; // Silently ignore MetaMask errors
+      return;
+    }
+    // Suppress duplicate key warnings for wallet adapters (browser may register same wallet twice)
+    if (message.includes('Encountered two children with the same key') && 
+        (message.includes('MetaMask') || message.includes('wallet'))) {
+      return;
     }
     originalError.apply(console, args);
   };
