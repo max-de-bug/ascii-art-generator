@@ -122,7 +122,7 @@ export const GenerateImageSection = () => {
         className="font-semibold text-foreground mb-4 text-sm uppercase tracking-wide hover:[text-shadow:0_0_10px_currentColor,0_0_20px_currentColor] transition-all duration-300 cursor-pointer"
         style={{ fontFamily: "var(--font-pixel), var(--font-press-start), monospace", fontWeight: 600, fontSize: "1.1rem", letterSpacing: "0.05em" }}
       >
-        1. Upload Your File
+        1. Upload Your Image
       </h3>
       <div className="space-y-3">
         <div>

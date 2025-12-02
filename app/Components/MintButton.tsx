@@ -13,13 +13,30 @@ import { getProgramId, getSolscanUrl } from "./utils/network-config";
 import { createImageBlob } from "./AsciiActions";
 
 export const MintButton = () => {
-  const { asciiOutput, zoom } = useAsciiStore();
+  const { asciiOutput, zoom, imageFile, inputText } = useAsciiStore();
   const [isMinting, setIsMinting] = useState(false);
   const { connected, publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const { network } = useNetwork();
   const queryClient = useQueryClient();
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Track if a source is loaded to prevent flickering during regeneration
+  const hasSource = !!(imageFile || inputText?.trim());
+  
+  // Cache whether we have valid output to prevent flickering
+  const hasValidOutputRef = useRef(false);
+  useEffect(() => {
+    if (asciiOutput) {
+      hasValidOutputRef.current = true;
+    } else if (!hasSource) {
+      // Only reset when source is removed
+      hasValidOutputRef.current = false;
+    }
+  }, [asciiOutput, hasSource]);
+  
+  // Consider output valid if we have current output OR (source is loaded AND we had output before)
+  const hasOutput = asciiOutput || (hasSource && hasValidOutputRef.current);
 
   const handleMint = async () => {
     // Prevent action if already minting
@@ -116,8 +133,9 @@ export const MintButton = () => {
   };
 
   // Determine button state and content
+  // Use hasOutput (cached) instead of asciiOutput to prevent flickering during regeneration
   const { text, disabled, icon } = useMemo(() => {
-    if (!asciiOutput) {
+    if (!hasOutput) {
       return {
         text: "Please generate an ASCII art first",
         disabled: true,
@@ -146,7 +164,7 @@ export const MintButton = () => {
       disabled: false,
       icon: null as React.ReactNode,
     };
-  }, [asciiOutput, isMinting, connected, publicKey, signTransaction]);
+  }, [hasOutput, isMinting, connected, publicKey, signTransaction]);
 
   return (
     <div className="mt-4 flex justify-center">
