@@ -1,6 +1,6 @@
 "use client";
 
-import { NetworkIcon, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -42,58 +42,75 @@ export const ToggleNetworkButton = () => {
 
   if (!mounted) {
     return (
-      <div className="h-10 w-[140px] bg-muted animate-pulse rounded-md" />
+      <div className="h-10 w-[120px] bg-muted animate-pulse rounded-sm" />
     );
   }
 
   const isMainnet = network === WalletAdapterNetwork.Mainnet;
   const networkLabel = isMainnet ? "Mainnet" : "Devnet";
 
-  const pixelFontStyle = {
-    fontFamily: "Retro-computer, 'Courier New', monospace",
-    fontWeight: 600,
-    letterSpacing: "0.05em",
-  };
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2 hover:bg-primary/10 transition-colors duration-300 cursor-pointer" style={pixelFontStyle}>
+        <Button 
+          className={cn(
+            "gap-2 px-4 py-2 text-xs uppercase tracking-wider transition-all duration-200 cursor-pointer border-0",
+            "bg-zinc-900 dark:bg-zinc-800 text-white",
+            "hover:bg-zinc-800 dark:hover:bg-zinc-700",
+            "hover:[text-shadow:0_0_8px_currentColor]"
+          )}
+          style={{ 
+            fontFamily: "var(--font-pixel), var(--font-press-start), monospace", 
+            fontWeight: 600, 
+            letterSpacing: "0.05em",
+            boxShadow: "inset 0px -2px 1px rgba(0, 0, 0, 0.3), inset 0px 2px 1px rgba(255, 255, 255, 0.1)"
+          }}
+        >
           <div
             className={cn(
-              "w-2 h-2 rounded-full",
-              isMainnet ? "bg-primary" : "bg-orange-500"
+              "w-2 h-2 rounded-full animate-pulse",
+              isMainnet ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]" : "bg-zinc-200 shadow-[0_0_6px_rgba(255,255,255,0.6)]"
             )}
           />
-          <NetworkIcon className="h-4 w-4" />
-          <span className="text-sm font-medium">{networkLabel}</span>
+          <span>{networkLabel}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 
         align="end" 
-        className="min-w-[180px] p-2"
-        style={pixelFontStyle}
+        className="min-w-[160px] p-1.5 bg-zinc-900 dark:bg-zinc-800 border-zinc-700"
+        style={{ 
+          fontFamily: "var(--font-pixel), var(--font-press-start), monospace",
+          letterSpacing: "0.03em"
+        }}
       >
         <DropdownMenuItem
           onClick={() => handleNetworkChange(WalletAdapterNetwork.Mainnet)}
           disabled
-          className="flex items-center justify-between py-2.5 px-3 text-base"
+          className={cn(
+            "flex items-center justify-between py-2 px-3 text-xs uppercase cursor-pointer rounded-sm",
+            "text-zinc-400 opacity-50",
+            isMainnet && "bg-zinc-800/50"
+          )}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-2.5 h-2.5 rounded-full bg-primary" />
-            <span className="font-semibold">Mainnet</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span>Mainnet</span>
           </div>
-          {isMainnet && <Check className="h-5 w-5" />}
+          {isMainnet && <Check className="h-4 w-4 text-emerald-400" />}
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => handleNetworkChange(WalletAdapterNetwork.Devnet)}
-          className="flex items-center justify-between py-2.5 px-3 text-base"
+          className={cn(
+            "flex items-center justify-between py-2 px-3 text-xs uppercase cursor-pointer rounded-sm",
+            "text-white hover:bg-zinc-700/50 transition-colors",
+            !isMainnet && "bg-zinc-800/50"
+          )}
         >
-          <div className="flex items-center gap-3">
-            <div className="w-2.5 h-2.5 rounded-full bg-orange-500" />
-            <span className="font-semibold">Devnet</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-2 h-2 rounded-full bg-zinc-200" />
+            <span>Devnet</span>
           </div>
-          {!isMainnet && <Check className="h-5 w-5" />}
+          {!isMainnet && <Check className="h-4 w-4 text-zinc-200" />}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

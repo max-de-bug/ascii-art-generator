@@ -63,6 +63,7 @@ export const MintButton = () => {
 
       if (!imageBlob) {
         toast.error("Failed to create image", { id: "mint" });
+        setIsMinting(false);
         return;
       }
 
@@ -73,61 +74,105 @@ export const MintButton = () => {
 
       toast.loading("Minting ASCII art NFT...", { id: "mint" });
 
-      // Mint NFT using Anchor program
-      // NFT.Storage API key is read from NEXT_PUBLIC_NFT_STORAGE_KEY env var
-      // You can also pass it explicitly via nftStorageKey parameter
-      const { mint, signature } = await mintAsciiArtNFTAnchor({
-        connection,
-        wallet: publicKey,
-        signTransaction: async (tx) => {
-          return await signTransaction(tx);
-        },
-        asciiArt: asciiOutput,
-        imageBlob,
-        programId,
-        name: "ASCII Art",
-        description: "Generated ASCII art NFT",
-        // nftStorageKey is optional - defaults to NEXT_PUBLIC_NFT_STORAGE_KEY from env
-      });
+      // Helper function to check if error is a user rejection
+      const isUserRejectionError = (error: any): boolean => {
+        return (
+          error?.name === "WalletSignTransactionError" ||
+          error?.constructor?.name === "WalletSignTransactionError" ||
+          error?.message?.toLowerCase().includes("rejected") ||
+          error?.message?.toLowerCase().includes("denied") ||
+          error?.message?.toLowerCase().includes("user rejected") ||
+          error?.message?.toLowerCase().includes("user cancelled") ||
+          error?.message?.toLowerCase().includes("cancelled") ||
+          error?.code === 4001 ||
+          error?.code === "ACTION_REJECTED" ||
+          error?.code === "USER_REJECTED"
+        );
+      };
 
-      const solscanUrl = getSolscanUrl(signature, network);
-      toast.success(
-        `ASCII art minted successfully! View on Solscan: ${solscanUrl}`,
-        { id: "mint", duration: 10000 }
-      );
-
-      console.log("Mint address:", mint.toString());
-      console.log("Transaction signature:", signature);
-    } catch (error: any) {
-      console.error("Minting error:", error);
+      // Temporarily suppress console errors for user rejections
+      const originalConsoleError = console.error;
+      let suppressedError: any = null;
       
-      // Handle user rejection gracefully
-      // Check error name, constructor name, or message for rejection indicators
-      const isUserRejection =
-        error?.name === "WalletSignTransactionError" ||
-        error?.constructor?.name === "WalletSignTransactionError" ||
-        error?.message?.toLowerCase().includes("rejected") ||
-        error?.message?.toLowerCase().includes("denied") ||
-        error?.message?.toLowerCase().includes("user rejected") ||
-        error?.message?.toLowerCase().includes("user cancelled") ||
-        error?.message?.toLowerCase().includes("cancelled") ||
-        error?.code === 4001 || // Common rejection code
-        error?.code === "ACTION_REJECTED" ||
-        error?.code === "USER_REJECTED";
+      console.error = (...args: any[]) => {
+        const errorMessage = args[0]?.toString() || '';
+        // Suppress WalletSignTransactionError console logs (user rejections are expected)
+        if (
+          errorMessage.includes("WalletSignTransactionError") ||
+          errorMessage.includes("User rejected") ||
+          errorMessage.includes("User cancelled")
+        ) {
+          suppressedError = args[0];
+          return; // Suppress the console error
+        }
+        originalConsoleError.apply(console, args);
+      };
 
-      if (isUserRejection) {
-        toast.info("Transaction cancelled. No changes were made.", {
-          id: "mint",
-          duration: 3000,
+      try {
+        const { mint, signature } = await mintAsciiArtNFTAnchor({
+          connection,
+          wallet: publicKey,
+          signTransaction: async (tx) => {
+            try {
+              return await signTransaction(tx);
+            } catch (error: any) {
+              // Check if this is a user rejection
+              if (isUserRejectionError(error)) {
+                // Create a clean error object for user rejection
+                const rejectionError: any = new Error("User rejected the transaction");
+                rejectionError.name = "WalletSignTransactionError";
+                rejectionError.isUserRejection = true;
+                throw rejectionError;
+              }
+              throw error;
+            }
+          },
+          asciiArt: asciiOutput,
+          imageBlob,
+          programId,
+          name: "ASCII Art",
+          description: "Generated ASCII art NFT",
+          // nftStorageKey is optional - defaults to NEXT_PUBLIC_NFT_STORAGE_KEY from env
         });
-      } else {
-        // Show error for other failures
+
+        const solscanUrl = getSolscanUrl(signature, network);
+        toast.success(
+          `ASCII art minted successfully! View on Solscan: ${solscanUrl}`,
+          { id: "mint", duration: 10000 }
+        );
+
+        console.log("Mint address:", mint.toString());
+        console.log("Transaction signature:", signature);
+      } catch (error: any) {
+        // Check if this is a user rejection (either from our wrapper or suppressed error)
+        const isUserRejection = isUserRejectionError(error) || suppressedError !== null;
+        
+        if (isUserRejection) {
+          // Don't log user rejections - they're expected behavior
+          toast.info("Transaction cancelled", {
+            id: "mint",
+            duration: 3000,
+          });
+        } else {
+          // Only log actual errors (console.error will be restored in finally)
+          originalConsoleError("Minting error:", error);
+          toast.error(
+            error?.message || "Failed to mint ASCII art. Please try again.",
+            { id: "mint" }
+          );
+        }
+      } finally {
+        // Always restore console.error and reset minting state
+        console.error = originalConsoleError;
+        setIsMinting(false);
+      }
+    } catch (error: any) {
+      // Handle any errors from image creation or other early steps
+      console.error("Error in mint process:", error);
       toast.error(
         error?.message || "Failed to mint ASCII art. Please try again.",
         { id: "mint" }
       );
-      }
-    } finally {
       setIsMinting(false);
     }
   };
