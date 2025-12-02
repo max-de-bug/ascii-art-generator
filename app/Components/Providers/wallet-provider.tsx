@@ -24,14 +24,15 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 if (typeof window !== 'undefined') {
   const originalError = console.error;
   console.error = (...args: any[]) => {
-    const message = args[0]?.toString() || '';
+    // Join all arguments to catch the full message (React passes key name as separate arg)
+    const fullMessage = args.map(arg => String(arg)).join(' ');
+    
     // Suppress MetaMask connection errors (non-critical for Solana wallets)
-    if (message.includes('MetaMask') || message.includes('Failed to connect to MetaMask')) {
+    if (fullMessage.includes('MetaMask') || fullMessage.includes('Failed to connect to MetaMask')) {
       return;
     }
     // Suppress duplicate key warnings for wallet adapters (browser may register same wallet twice)
-    if (message.includes('Encountered two children with the same key') && 
-        (message.includes('MetaMask') || message.includes('wallet'))) {
+    if (fullMessage.includes('Encountered two children with the same key')) {
       return;
     }
     originalError.apply(console, args);
