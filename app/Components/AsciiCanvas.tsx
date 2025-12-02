@@ -1,16 +1,32 @@
 "use client";
-import { useMemo, memo } from "react";
+import { useMemo, memo, useRef, useEffect } from "react";
 import { useSphereAnimation } from "./hooks/useSphereAnimation";
 
 interface AsciiCanvasProps {
   asciiOutput: string;
   zoom: number[];
+  hasSource?: boolean; // Whether an image or text source is loaded
 }
 
 // Memoized canvas component to prevent unnecessary rerenders
-export const AsciiCanvas = memo(({ asciiOutput, zoom }: AsciiCanvasProps) => {
+export const AsciiCanvas = memo(({ asciiOutput, zoom, hasSource = false }: AsciiCanvasProps) => {
   const fontSize = useMemo(() => `${(zoom[0] / 100) * 12}px`, [zoom]);
-  const showAnimation = !asciiOutput;
+  
+  // Keep track of the last valid ASCII output to prevent flickering during regeneration
+  const lastOutputRef = useRef<string>("");
+  
+  // Update the ref when we have valid output
+  useEffect(() => {
+    if (asciiOutput) {
+      lastOutputRef.current = asciiOutput;
+    }
+  }, [asciiOutput]);
+  
+  // Use the current output, or fall back to last output if source is still loaded (regenerating)
+  const displayOutput = asciiOutput || (hasSource ? lastOutputRef.current : "");
+  
+  // Only show animation when there's no source loaded and no output
+  const showAnimation = !hasSource && !displayOutput;
   const { frame: sphereFrame, textFrame, isInitialized } = useSphereAnimation(showAnimation, "O.ASCII Art generator");
   
   return (
@@ -26,8 +42,8 @@ export const AsciiCanvas = memo(({ asciiOutput, zoom }: AsciiCanvasProps) => {
             lineHeight: "1.1",
           }}
         >
-          {asciiOutput ? (
-            <code>{asciiOutput}</code>
+          {displayOutput ? (
+            <code>{displayOutput}</code>
           ) : isInitialized && sphereFrame ? (
             <code>
               {sphereFrame}

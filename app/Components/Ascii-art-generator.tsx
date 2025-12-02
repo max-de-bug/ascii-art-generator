@@ -7,8 +7,11 @@ import { AsciiCanvas } from "./AsciiCanvas";
 import { useUserLevelData } from "./hooks/useUserLevelData";
 
 const AsciiGenerator = () => {
-  const { asciiOutput, zoom } = useAsciiStore();
+  const { asciiOutput, zoom, imageFile, inputText } = useAsciiStore();
   const { shardStatus, userLevel, isLoading, error, connected, mounted } = useUserLevelData();
+  
+  // Track if there's a source loaded (image or text)
+  const hasSource = !!(imageFile || inputText?.trim());
 
   return (
     <main className="flex-1 overflow-y-auto p-6 bg-background flex justify-center">
@@ -40,7 +43,7 @@ const AsciiGenerator = () => {
             </p>
           </div>
 
-          <AsciiCanvas asciiOutput={asciiOutput} zoom={zoom} />
+          <AsciiCanvas asciiOutput={asciiOutput} zoom={zoom} hasSource={hasSource} />
         </div>
         <MintButton />
       </div>
