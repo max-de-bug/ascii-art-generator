@@ -5,28 +5,6 @@
  */
 export function generate_text_in_center(text: string, width: number, height: number): string;
 /**
- * Generate ASCII art text centered in a grid with animated shining effect
- * 
- * # Parameters
- * - `text`: The text to render
- * - `width`: Width of the output grid
- * - `height`: Height of the output grid
- * - `time`: Animation time (typically from 0.0, increasing continuously)
- *           The shine effect will cycle based on this value
- * 
- * # Returns
- * A string containing the ASCII art with animated shine effect
- * 
- * # Example
- * ```rust
- * // For a continuous animation, call this function with increasing time values
- * // e.g., time = 0.0, 0.1, 0.2, ... in your animation loop
- * let frame1 = generate_text_in_center_animated("HELLO", 40, 10, 0.0);
- * let frame2 = generate_text_in_center_animated("HELLO", 40, 10, 0.1);
- * ```
- */
-export function generate_text_in_center_animated(text: string, width: number, height: number, time: number): string;
-/**
  * Generate a single frame of the animated organic circle
  * Returns the ASCII art string for the current frame
  */
@@ -37,9 +15,18 @@ export function generate_sphere_frame(angle: number): string;
 export function get_image_dimensions(image_data: Uint8Array): Uint32Array;
 /**
  * Compress and optimize an image optimized for ASCII art
- * Since all images are ASCII art, applies specific optimizations:
- * - Slightly lower quality (text is more forgiving of compression)
- * - JPEG format recommended (better compression for text on solid backgrounds)
+ * 
+ * ASCII art (text on solid backgrounds) compresses extremely well with aggressive settings:
+ * - Aggressive quality reduction (50-75% range) - text is very forgiving
+ * - Automatic quality adjustment based on image size
+ * - Smart format selection (JPEG preferred for ASCII art)
+ * - Safety checks to avoid making files larger
+ * 
+ * Optimization strategy:
+ * - Small images (< 50KB): Very aggressive compression (50-65% quality)
+ * - Medium images (50-200KB): Moderate compression (60-70% quality)
+ * - Large images (> 200KB): Standard compression (65-75% quality)
+ * - Returns original if compression would make file larger
  * 
  * # Arguments
  * * `image_data` - Raw image bytes (PNG, JPEG, etc.)
@@ -73,6 +60,19 @@ export enum ChromaSampling {
    */
   Cs400 = 3,
 }
+/**
+ * Image output format
+ */
+export enum ImageFormatType {
+  /**
+   * JPEG format (better compression for ASCII art)
+   */
+  Jpeg = 0,
+  /**
+   * PNG format (lossless, but larger for ASCII art)
+   */
+  Png = 1,
+}
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -82,7 +82,6 @@ export interface InitOutput {
   readonly convert_to_ascii: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number, n: number, o: number, p: number, q: number, r: number, s: number, t: number) => void;
   readonly generate_sphere_frame: (a: number, b: number) => void;
   readonly generate_text_in_center: (a: number, b: number, c: number, d: number, e: number) => void;
-  readonly generate_text_in_center_animated: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
   readonly get_image_dimensions: (a: number, b: number, c: number) => void;
   readonly __wbindgen_add_to_stack_pointer: (a: number) => number;
   readonly __wbindgen_export: (a: number, b: number) => number;

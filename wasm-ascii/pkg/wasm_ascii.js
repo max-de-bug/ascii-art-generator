@@ -134,51 +134,6 @@ export function generate_text_in_center(text, width, height) {
 }
 
 /**
- * Generate ASCII art text centered in a grid with animated shining effect
- *
- * # Parameters
- * - `text`: The text to render
- * - `width`: Width of the output grid
- * - `height`: Height of the output grid
- * - `time`: Animation time (typically from 0.0, increasing continuously)
- *           The shine effect will cycle based on this value
- *
- * # Returns
- * A string containing the ASCII art with animated shine effect
- *
- * # Example
- * ```rust
- * // For a continuous animation, call this function with increasing time values
- * // e.g., time = 0.0, 0.1, 0.2, ... in your animation loop
- * let frame1 = generate_text_in_center_animated("HELLO", 40, 10, 0.0);
- * let frame2 = generate_text_in_center_animated("HELLO", 40, 10, 0.1);
- * ```
- * @param {string} text
- * @param {number} width
- * @param {number} height
- * @param {number} time
- * @returns {string}
- */
-export function generate_text_in_center_animated(text, width, height, time) {
-    let deferred2_0;
-    let deferred2_1;
-    try {
-        const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        const ptr0 = passStringToWasm0(text, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-        const len0 = WASM_VECTOR_LEN;
-        wasm.generate_text_in_center_animated(retptr, ptr0, len0, width, height, time);
-        var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-        var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-        deferred2_0 = r0;
-        deferred2_1 = r1;
-        return getStringFromWasm0(r0, r1);
-    } finally {
-        wasm.__wbindgen_add_to_stack_pointer(16);
-        wasm.__wbindgen_export3(deferred2_0, deferred2_1, 1);
-    }
-}
-
-/**
  * Generate a single frame of the animated organic circle
  * Returns the ASCII art string for the current frame
  * @param {number} angle
@@ -267,9 +222,18 @@ function getArrayU8FromWasm0(ptr, len) {
 }
 /**
  * Compress and optimize an image optimized for ASCII art
- * Since all images are ASCII art, applies specific optimizations:
- * - Slightly lower quality (text is more forgiving of compression)
- * - JPEG format recommended (better compression for text on solid backgrounds)
+ *
+ * ASCII art (text on solid backgrounds) compresses extremely well with aggressive settings:
+ * - Aggressive quality reduction (50-75% range) - text is very forgiving
+ * - Automatic quality adjustment based on image size
+ * - Smart format selection (JPEG preferred for ASCII art)
+ * - Safety checks to avoid making files larger
+ *
+ * Optimization strategy:
+ * - Small images (< 50KB): Very aggressive compression (50-65% quality)
+ * - Medium images (50-200KB): Moderate compression (60-70% quality)
+ * - Large images (> 200KB): Standard compression (65-75% quality)
+ * - Returns original if compression would make file larger
  *
  * # Arguments
  * * `image_data` - Raw image bytes (PNG, JPEG, etc.)
@@ -373,6 +337,20 @@ export const ChromaSampling = Object.freeze({
      * Monochrome.
      */
     Cs400: 3, "3": "Cs400",
+});
+/**
+ * Image output format
+ * @enum {0 | 1}
+ */
+export const ImageFormatType = Object.freeze({
+    /**
+     * JPEG format (better compression for ASCII art)
+     */
+    Jpeg: 0, "0": "Jpeg",
+    /**
+     * PNG format (lossless, but larger for ASCII art)
+     */
+    Png: 1, "1": "Png",
 });
 
 const EXPECTED_RESPONSE_TYPES = new Set(['basic', 'cors', 'default']);
