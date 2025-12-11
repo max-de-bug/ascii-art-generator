@@ -1,0 +1,31 @@
+
+> ascii-art-generator-backend@0.0.1 start:prod
+> node dist/main
+
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [NestFactory] Starting Nest application...
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] TypeOrmModule dependencies initialized +39ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] ConfigHostModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] ConfigModule dependencies initialized +1ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] ConfigModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] TerminusModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] ThrottlerModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:10 PM     LOG [InstanceLoader] AppModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [NftStorageService] Initialized Solana connection for ownership verification. Network: mainnet-beta, RPC: https://api.mainnet-beta.solan...
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [InstanceLoader] TypeOrmCoreModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [InstanceLoader] TypeOrmModule dependencies initialized +0ms
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [SolanaIndexerService] [Indexer] Program ID configured: 56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [SolanaIndexerService] Initialized indexer for program: 56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [SolanaIndexerService] RPC URL: https://api.mainnet-beta.solana.com
+[Nest] 6640  - 12/11/2025, 8:25:12 PM     LOG [SolanaIndexerService] Network: mainnet-beta
+[Nest] 6640  - 12/11/2025, 8:25:12 PM   ERROR [ExceptionHandler] Error: AUTHORITY_KEYPAIR_PATH or AUTHORITY_PRIVATE_KEY must be set in environment
+    at BuybackExecutorService.loadAuthorityKeypair (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/dist/nft/services/buyback-executor.service.js:93:19)
+    at new BuybackExecutorService (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/dist/nft/services/buyback-executor.service.js:73:14)
+    at Injector.instantiateClass (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/node_modules/@nestjs/core/injector/injector.js:418:19)
+    at callback (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/node_modules/@nestjs/core/injector/injector.js:70:45)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async Injector.resolveConstructorParams (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/node_modules/@nestjs/core/injector/injector.js:170:24)
+    at async Injector.loadInstance (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/node_modules/@nestjs/core/injector/injector.js:75:13)
+    at async Injector.loadProvider (/home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/node_modules/@nestjs/core/injector/injector.js:103:9)
+    at async /home/test01/ascii-art-generator/app/backend/ascii-art-generator-backend/node_modules/@nestjs/core/injector/instance-loader.js:56:13
+    at async Promise.all (index 7)

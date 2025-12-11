@@ -1,7 +1,3 @@
-//! Solana Indexer Service
-//!
-//! Listens to Solana transactions and indexes MintEvent and BuybackEvent.
-//! Supports WebSocket subscriptions for real-time updates and periodic polling.
 
 use solana_client::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcTransactionConfig;
@@ -225,10 +221,16 @@ impl SolanaIndexerService {
     async fn backfill_recent_transactions(&self) -> AppResult<()> {
         info!("Backfilling recent transactions...");
 
-        let signatures = self
-            .rpc_client
-            .get_signatures_for_address(&self.program_id)
-            .map_err(|e| AppError::SolanaRpc(e.to_string()))?;
+        // Use spawn_blocking for blocking RPC client call
+        let rpc_url = self.config.get_rpc_url().to_string();
+        let program_id = self.program_id;
+        let signatures = tokio::task::spawn_blocking(move || {
+            let client = RpcClient::new(rpc_url);
+            client.get_signatures_for_address(&program_id)
+        })
+        .await
+        .map_err(|e| AppError::SolanaRpc(format!("Task join error: {}", e)))?
+        .map_err(|e| AppError::SolanaRpc(e.to_string()))?;
 
         let mut processed = 0;
         let mut skipped = 0;
@@ -284,17 +286,23 @@ impl SolanaIndexerService {
         let retry_delay_ms = self.retry_delay_ms;
 
         tokio::spawn(async move {
-            let rpc_client = RpcClient::new(rpc_url);
-
             loop {
                 // Check if we should stop
                 if !*is_indexing.read().await {
                     break;
                 }
 
-                // Poll for new transactions
-                match rpc_client.get_signatures_for_address(&program_id) {
-                    Ok(signatures) => {
+                // Poll for new transactions using spawn_blocking
+                let rpc_url_clone = rpc_url.clone();
+                let program_id_clone = program_id;
+                let signatures_result = tokio::task::spawn_blocking(move || {
+                    let client = RpcClient::new(rpc_url_clone);
+                    client.get_signatures_for_address(&program_id_clone)
+                })
+                .await;
+
+                match signatures_result {
+                    Ok(Ok(signatures)) => {
                         for sig_info in signatures.iter().take(poll_limit) {
                             let signature = &sig_info.signature;
 
@@ -324,7 +332,7 @@ impl SolanaIndexerService {
                             let mut success = false;
                             for attempt in 0..max_retries {
                                 match Self::fetch_and_process_transaction(
-                                    &rpc_client,
+                                    &rpc_url,
                                     signature,
                                     &program_id,
                                     &event_parser,
@@ -376,8 +384,11 @@ impl SolanaIndexerService {
                             tokio::time::sleep(Duration::from_millis(rate_limit_delay_ms)).await;
                         }
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         warn!("Error polling for signatures: {}", e);
+                    }
+                    Err(e) => {
+                        warn!("Error joining spawn_blocking task: {}", e);
                     }
                 }
 
@@ -389,7 +400,7 @@ impl SolanaIndexerService {
 
     /// Fetch and process a single transaction
     async fn fetch_and_process_transaction(
-        rpc_client: &RpcClient,
+        rpc_url: &str,
         signature: &str,
         program_id: &Pubkey,
         event_parser: &EventParserService,
@@ -398,15 +409,21 @@ impl SolanaIndexerService {
         let sig = Signature::from_str(signature)
             .map_err(|e| AppError::Validation(format!("Invalid signature: {}", e)))?;
 
-        let config = RpcTransactionConfig {
-            encoding: Some(UiTransactionEncoding::Json),
-            commitment: Some(CommitmentConfig::confirmed()),
-            max_supported_transaction_version: Some(0),
-        };
-
-        let transaction = rpc_client
-            .get_transaction_with_config(&sig, config)
-            .map_err(|e| AppError::SolanaRpc(e.to_string()))?;
+        // Use spawn_blocking for blocking RPC call
+        let rpc_url_owned = rpc_url.to_string();
+        let sig_clone = sig;
+        let transaction = tokio::task::spawn_blocking(move || {
+            let client = RpcClient::new(rpc_url_owned);
+            let config = RpcTransactionConfig {
+                encoding: Some(UiTransactionEncoding::Json),
+                commitment: Some(CommitmentConfig::confirmed()),
+                max_supported_transaction_version: Some(0),
+            };
+            client.get_transaction_with_config(&sig_clone, config)
+        })
+        .await
+        .map_err(|e| AppError::SolanaRpc(format!("Task join error: {}", e)))?
+        .map_err(|e| AppError::SolanaRpc(e.to_string()))?;
 
         // Process the transaction
         Self::process_transaction(
@@ -459,7 +476,7 @@ impl SolanaIndexerService {
     /// Process a single signature
     async fn process_signature(&self, signature: &str) -> AppResult<()> {
         Self::fetch_and_process_transaction(
-            &self.rpc_client,
+            self.config.get_rpc_url(),
             signature,
             &self.program_id,
             &self.event_parser,

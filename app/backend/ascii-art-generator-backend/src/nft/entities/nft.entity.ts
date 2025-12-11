@@ -33,22 +33,22 @@ export class NFT {
   @Column({ type: 'text' })
   uri: string; // Metadata URI (IPFS)
 
-  @Column({ type: 'varchar', length: 88, unique: true })
+  @Column({ type: 'varchar', length: 88, unique: true, name: 'transaction_signature' })
   @Index()
   transactionSignature: string;
 
   @Column({ type: 'bigint' })
   slot: number;
 
-  @Column({ type: 'bigint', nullable: true })
+  @Column({ type: 'bigint', nullable: true, name: 'block_time' })
   blockTime: number | null;
 
   @Column({ type: 'bigint' })
   timestamp: number; // Unix timestamp from event
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 }

@@ -15,10 +15,10 @@ import { UserLevel } from './user-level.entity';
  */
 @Entity('users')
 export class User {
-  @PrimaryColumn({ type: 'varchar', length: 44 })
+  @PrimaryColumn({ type: 'varchar', length: 44, name: 'wallet_address' })
   walletAddress: string; // User's wallet address (Pubkey) - primary identifier
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'display_name' })
   displayName: string | null; // Optional display name
 
   @Column({ type: 'text', nullable: true })
@@ -33,16 +33,16 @@ export class User {
   @Column({ type: 'json', nullable: true })
   preferences: Record<string, any> | null; // User preferences/settings
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn()
+  @UpdateDateColumn({ name: 'updated_at' })
   updatedAt: Date;
 
   // Relationship to UserLevel (one-to-one, shared primary key)
   @OneToOne(() => UserLevel, (userLevel) => userLevel.user, {
     cascade: false,
   })
-  @JoinColumn({ name: 'walletAddress' })
+  @JoinColumn({ name: 'wallet_address' })
   userLevel?: UserLevel;
 }

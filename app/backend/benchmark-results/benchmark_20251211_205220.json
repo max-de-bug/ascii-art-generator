@@ -1,0 +1,33 @@
+{
+  "timestamp": "20251211_205220",
+  "config": {
+    "backfill_limit": 100,
+    "api_duration_seconds": 30,
+    "api_connections": 64,
+    "api_threads": 4
+  },
+  "results": {
+    "rust": {
+      "backfill": {
+        "duration_seconds": "100.57",
+        "throughput_tx_per_second": "0.99"
+      },
+      "api": {
+        "memory_before_mb": "N/A",
+        "memory_after_mb": "N/A",
+        "cpu_percent": "N/A"
+      }
+    },
+    "nestjs": {
+      "backfill": {
+        "duration_seconds": "6.03",
+        "throughput_tx_per_second": "16.59"
+      },
+      "api": {
+        "memory_before_mb": "N/A",
+        "memory_after_mb": "N/A",
+        "cpu_percent": "N/A"
+      }
+    }
+  }
+}

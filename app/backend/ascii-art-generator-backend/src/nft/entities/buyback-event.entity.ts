@@ -15,14 +15,14 @@ export class BuybackEvent {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 88, unique: true })
+  @Column({ type: 'varchar', length: 88, unique: true, name: 'transaction_signature' })
   @Index()
   transactionSignature: string; // Transaction signature
 
-  @Column({ type: 'bigint' })
+  @Column({ type: 'bigint', name: 'amount_sol' })
   amountSol: number; // Amount of SOL swapped (in lamports)
 
-  @Column({ type: 'bigint' })
+  @Column({ type: 'bigint', name: 'token_amount' })
   tokenAmount: number; // Amount of tokens received (in token's smallest unit)
 
   @Column({ type: 'bigint' })
@@ -32,9 +32,9 @@ export class BuybackEvent {
   @Column({ type: 'bigint' })
   slot: number; // Solana slot number
 
-  @Column({ type: 'bigint', nullable: true })
+  @Column({ type: 'bigint', nullable: true, name: 'block_time' })
   blockTime: number | null; // Block time from transaction
 
-  @CreateDateColumn()
+  @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

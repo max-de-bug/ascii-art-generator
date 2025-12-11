@@ -75,6 +75,8 @@ refinery = { version = "0.8", features = ["tokio-postgres"] }
 prometheus = "0.13"
 # TLS connector for Postgres (Supabase requires SSL)
 tokio-postgres-rustls = "0.12"
+rustls = { version = "0.23", features = ["aws_lc_rs"] }
+webpki-roots = "0.26"
 
 
 [dev-dependencies]

@@ -111,7 +111,8 @@ impl NftStorageService {
             *running = true;
         }
 
-        let verification_threshold = Utc::now() - Duration::days(Self::VERIFICATION_AGE_DAYS);
+        // Use timestamp for PostgreSQL TIMESTAMPTZ comparison
+        let verification_threshold: chrono::DateTime<Utc> = Utc::now() - Duration::days(Self::VERIFICATION_AGE_DAYS);
 
         let mut offset: i64 = 0;
         let mut total_removed = 0;
@@ -122,11 +123,11 @@ impl NftStorageService {
         let client = self.pool.get().await.map_err(|e| AppError::Database(e.to_string()))?;
 
         loop {
-            // Get batch of NFTs to check
+            // Get batch of NFTs to check - cast threshold to timestamptz in query
             let rows = client
                 .query(
                     "SELECT id, mint, minter, name, symbol, uri, transaction_signature, slot, block_time, timestamp, created_at, updated_at
-                     FROM nfts WHERE updated_at < $1 ORDER BY updated_at ASC LIMIT $2 OFFSET $3",
+                     FROM nfts WHERE updated_at < $1::timestamptz ORDER BY updated_at ASC LIMIT $2 OFFSET $3",
                     &[&verification_threshold, &Self::BATCH_SIZE, &offset],
                 )
                 .await

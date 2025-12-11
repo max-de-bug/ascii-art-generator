@@ -1,8 +1,8 @@
 use actix_cors::Cors;
 use actix_web::{middleware::Logger, web, App, HttpResponse, HttpServer};
 use deadpool_postgres::{Config, Pool, Runtime};
-use tokio_postgres::NoTls;
 use std::sync::Arc;
+use tokio_postgres_rustls::MakeRustlsConnect;
 use tokio::sync::RwLock;
 use tracing::{info, warn};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -19,6 +19,56 @@ use services::{
     event_parser::EventParserService, nft_storage::NftStorageService,
     solana_indexer::SolanaIndexerService,
 };
+
+
+#[derive(Debug)]
+struct NoVerifier;
+
+impl rustls::client::danger::ServerCertVerifier for NoVerifier {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _server_name: &rustls::pki_types::ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        _message: &[u8],
+        _cert: &rustls::pki_types::CertificateDer<'_>,
+        _dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        vec![
+            rustls::SignatureScheme::RSA_PKCS1_SHA256,
+            rustls::SignatureScheme::RSA_PKCS1_SHA384,
+            rustls::SignatureScheme::RSA_PKCS1_SHA512,
+            rustls::SignatureScheme::ECDSA_NISTP256_SHA256,
+            rustls::SignatureScheme::ECDSA_NISTP384_SHA384,
+            rustls::SignatureScheme::ECDSA_NISTP521_SHA512,
+            rustls::SignatureScheme::RSA_PSS_SHA256,
+            rustls::SignatureScheme::RSA_PSS_SHA384,
+            rustls::SignatureScheme::RSA_PSS_SHA512,
+            rustls::SignatureScheme::ED25519,
+        ]
+    }
+}
 
 /// Application state shared across handlers
 pub struct AppState {
@@ -46,7 +96,7 @@ async fn main() -> std::io::Result<()> {
     info!("Network: {}", config.solana.network);
     info!("Program ID: {}", config.solana.program_id);
 
-    // Initialize database connection pool using deadpool-postgres
+    // Initialize database connection pool using deadpool-postgres with TLS
     let mut pg_config = Config::new();
     pg_config.host = Some(config.database.host.clone());
     pg_config.port = Some(config.database.port);
@@ -54,8 +104,19 @@ async fn main() -> std::io::Result<()> {
     pg_config.password = Some(config.database.password.clone());
     pg_config.dbname = Some(config.database.name.clone());
 
+    // Configure TLS for Supabase connection (using aws-lc-rs crypto provider)
+    // Note: Supabase uses certs that may not be in standard root stores,
+    // so we use a custom verifier that accepts all certificates (like NestJS with rejectUnauthorized: false)
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    
+    let tls_config = rustls::ClientConfig::builder()
+        .dangerous()
+        .with_custom_certificate_verifier(Arc::new(NoVerifier))
+        .with_no_client_auth();
+    let tls = MakeRustlsConnect::new(tls_config);
+
     let pool = pg_config
-        .create_pool(Some(Runtime::Tokio1), NoTls)
+        .create_pool(Some(Runtime::Tokio1), tls)
         .expect("Failed to create database pool");
 
     // Test database connection
@@ -150,6 +211,8 @@ async fn main() -> std::io::Result<()> {
                 "/health/indexer",
                 web::get().to(handlers::health::indexer_status),
             )
+            // Prometheus metrics endpoint
+            .route("/metrics", web::get().to(metrics_handler))
             // NFT endpoints
             .service(
                 web::scope("/nft")
