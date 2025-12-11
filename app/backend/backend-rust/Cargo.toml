@@ -1,0 +1,88 @@
+[package]
+name = "ascii-art-generator-backend"
+version = "0.1.0"
+edition = "2021"
+authors = ["ASCII Art Generator Team"]
+description = "Rust backend for ASCII Art Generator - Solana NFT indexer with user leveling system"
+
+[dependencies]
+# Web framework
+actix-web = "4"
+actix-cors = "0.7"
+actix-rt = "2"
+
+# Async runtime
+tokio = { version = "1", features = ["full", "sync"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Database
+tokio-postgres = { version = "0.7", features = ["with-uuid-1", "with-chrono-0_4", "with-serde_json-1"] }
+deadpool-postgres = "0.14"
+postgres-types = { version = "0.2", features = ["derive"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Solana
+solana-sdk = "2"
+solana-client = "2"
+solana-account-decoder = "2"
+solana-transaction-status = "2"
+spl-token = "6"
+spl-associated-token-account = "4"
+borsh = "1"
+bs58 = "0.5"
+
+# Configuration
+dotenvy = "0.15"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Rate limiting
+governor = "0.8"
+
+# HTTP client for Jupiter API
+reqwest = { version = "0.12", features = ["json"] }
+
+# Base64 encoding/decoding
+base64 = "0.22"
+
+# Async utilities
+futures = "0.3"
+async-trait = "0.1"
+
+# Lazy static initialization
+once_cell = "1"
+
+# Scope guard for cleanup
+scopeguard = "1"
+
+
+# Refinery for database migrations
+
+refinery = { version = "0.8", features = ["tokio-postgres"] }
+# Metrics
+prometheus = "0.13"
+# TLS connector for Postgres (Supabase requires SSL)
+tokio-postgres-rustls = "0.12"
+
+
+[dev-dependencies]
+actix-rt = "2"
+tokio-test = "0.4"
+mockall = "0.13"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

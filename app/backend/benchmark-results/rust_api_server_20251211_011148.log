@@ -1,0 +1,4 @@
+[2m2025-12-10T23:13:07.954858Z[0m [32m INFO[0m [2mascii_art_generator_backend[0m[2m:[0m Starting ASCII Art Generator Backend (Rust)
+[2m2025-12-10T23:13:07.954933Z[0m [32m INFO[0m [2mascii_art_generator_backend[0m[2m:[0m Network: devnet
+[2m2025-12-10T23:13:07.954939Z[0m [32m INFO[0m [2mascii_art_generator_backend[0m[2m:[0m Program ID: DvGwWxoj4k1BQfRoEL18CNYnZ8XYZp1xYHSgBZdvaCKT
+[2m2025-12-10T23:13:08.219160Z[0m [32m INFO[0m [2mascii_art_generator_backend[0m[2m:[0m Connected to PostgreSQL database
