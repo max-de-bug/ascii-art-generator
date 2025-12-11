@@ -7,14 +7,11 @@ use std::io::Cursor;
 #[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageFormatType {
-    /// JPEG format (better compression for ASCII art)
     Jpeg,
-    /// PNG format (lossless, but larger for ASCII art)
     Png,
 }
 
 impl ImageFormatType {
-    /// Parse from string (for backward compatibility)
     fn from_str(s: &str) -> Result<Self, String> {
         match s.to_lowercase().as_str() {
             "jpeg" | "jpg" => Ok(Self::Jpeg),
@@ -25,7 +22,6 @@ impl ImageFormatType {
 
 }
 
-/// Compression configuration for ASCII art optimization
 #[derive(Debug, Clone)]
 struct CompressionConfig {
     quality: u8,
@@ -35,7 +31,6 @@ struct CompressionConfig {
 }
 
 impl CompressionConfig {
-    /// Calculate ASCII-optimized quality
     /// Maps input quality (0-100) to ASCII-optimized range (50-75)
     fn calculate_ascii_quality(&self) -> u8 {
         let mapped_quality = if self.quality >= 80 {
