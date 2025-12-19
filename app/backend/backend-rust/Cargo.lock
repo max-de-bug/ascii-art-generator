@@ -488,6 +488,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "governor 0.8.1",
+ "http 1.4.0",
  "mockall",
  "once_cell",
  "postgres-types",
@@ -511,7 +512,9 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
+ "vercel_runtime",
  "webpki-roots 0.26.11",
 ]
 
@@ -2147,6 +2150,7 @@ dependencies = [
  "http 1.4.0",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "pin-utils",
@@ -2209,6 +2213,7 @@ dependencies = [
  "socket2 0.6.1",
  "system-configuration",
  "tokio",
+ "tower-layer",
  "tower-service",
  "tracing",
  "windows-registry",
@@ -7617,6 +7622,26 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "vercel_runtime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69193472f4f27685f726935d7811e5d66be2941edae8dd3f129b281c28b1baaa"
+dependencies = [
+ "base64 0.22.1",
+ "http-body",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "lazy_static",
+ "libc",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tower",
+]
 
 [[package]]
 name = "version_check"

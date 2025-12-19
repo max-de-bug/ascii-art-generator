@@ -5,11 +5,55 @@ edition = "2021"
 authors = ["ASCII Art Generator Team"]
 description = "Rust backend for ASCII Art Generator - Solana NFT indexer with user leveling system"
 
+[lib]
+name = "ascii_art_backend"
+path = "src/lib.rs"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+# Vercel serverless function binaries
+[[bin]]
+name = "health"
+path = "api/health.rs"
+
+[[bin]]
+name = "user_nfts"
+path = "api/user_nfts.rs"
+
+[[bin]]
+name = "user_level"
+path = "api/user_level.rs"
+
+[[bin]]
+name = "user_shard_status"
+path = "api/user_shard_status.rs"
+
+[[bin]]
+name = "nft_by_mint"
+path = "api/nft_by_mint.rs"
+
+[[bin]]
+name = "statistics"
+path = "api/statistics.rs"
+
+[[bin]]
+name = "buybacks"
+path = "api/buybacks.rs"
+
+[[bin]]
+name = "indexer_status"
+path = "api/indexer_status.rs"
+
 [dependencies]
-# Web framework
+# Web framework (for standalone server)
 actix-web = "4"
 actix-cors = "0.7"
 actix-rt = "2"
+
+# Vercel serverless runtime
+vercel_runtime = "2.1"
 
 # Async runtime
 tokio = { version = "1", features = ["full", "sync"] }
@@ -67,17 +111,22 @@ once_cell = "1"
 # Scope guard for cleanup
 scopeguard = "1"
 
-
 # Refinery for database migrations
-
 refinery = { version = "0.8", features = ["tokio-postgres"] }
+
 # Metrics
 prometheus = "0.13"
+
 # TLS connector for Postgres (Supabase requires SSL)
 tokio-postgres-rustls = "0.12"
 rustls = { version = "0.23", features = ["aws_lc_rs"] }
 webpki-roots = "0.26"
 
+# URL parsing for Vercel
+url = "2"
+
+# HTTP types
+http = "1"
 
 [dev-dependencies]
 actix-rt = "2"

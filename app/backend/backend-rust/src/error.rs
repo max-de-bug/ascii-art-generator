@@ -1,4 +1,7 @@
-use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+//! Application error types
+//!
+//! Provides error handling for both Actix-web server and Vercel serverless functions.
+
 use serde::Serialize;
 use std::fmt;
 
@@ -49,29 +52,31 @@ impl std::error::Error for AppError {}
 
 /// Error response structure for JSON responses
 #[derive(Serialize)]
-struct ErrorResponse {
-    error: String,
-    message: String,
+pub struct ErrorResponse {
+    pub error: String,
+    pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    details: Option<String>,
+    pub details: Option<String>,
 }
 
-impl ResponseError for AppError {
-    fn status_code(&self) -> StatusCode {
+impl AppError {
+    /// Get HTTP status code for this error
+    pub fn status_code(&self) -> u16 {
         match self {
-            AppError::Database(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::SolanaRpc(_) => StatusCode::SERVICE_UNAVAILABLE,
-            AppError::NotFound(_) => StatusCode::NOT_FOUND,
-            AppError::Validation(_) => StatusCode::BAD_REQUEST,
-            AppError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::RateLimitExceeded => StatusCode::TOO_MANY_REQUESTS,
-            AppError::Config(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            AppError::Serialization(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::Database(_) => 500,
+            AppError::SolanaRpc(_) => 503,
+            AppError::NotFound(_) => 404,
+            AppError::Validation(_) => 400,
+            AppError::Internal(_) => 500,
+            AppError::RateLimitExceeded => 429,
+            AppError::Config(_) => 500,
+            AppError::Serialization(_) => 500,
         }
     }
 
-    fn error_response(&self) -> HttpResponse {
-        let error_type = match self {
+    /// Get error type string
+    pub fn error_type(&self) -> &'static str {
+        match self {
             AppError::Database(_) => "DATABASE_ERROR",
             AppError::SolanaRpc(_) => "SOLANA_RPC_ERROR",
             AppError::NotFound(_) => "NOT_FOUND",
@@ -80,15 +85,46 @@ impl ResponseError for AppError {
             AppError::RateLimitExceeded => "RATE_LIMIT_EXCEEDED",
             AppError::Config(_) => "CONFIG_ERROR",
             AppError::Serialization(_) => "SERIALIZATION_ERROR",
-        };
+        }
+    }
 
-        let response = ErrorResponse {
-            error: error_type.to_string(),
+    /// Convert to ErrorResponse for JSON serialization
+    pub fn to_error_response(&self) -> ErrorResponse {
+        ErrorResponse {
+            error: self.error_type().to_string(),
             message: self.to_string(),
             details: None,
-        };
+        }
+    }
+}
 
-        HttpResponse::build(self.status_code()).json(response)
+// Actix-web integration
+#[cfg(feature = "actix")]
+mod actix_impl {
+    use super::*;
+    use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+
+    impl ResponseError for AppError {
+        fn status_code(&self) -> StatusCode {
+            StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+
+        fn error_response(&self) -> HttpResponse {
+            HttpResponse::build(self.status_code()).json(self.to_error_response())
+        }
+    }
+}
+
+// Always provide Actix-web integration (it's always in dependencies)
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
+
+impl ResponseError for AppError {
+    fn status_code(&self) -> StatusCode {
+        StatusCode::from_u16(AppError::status_code(self)).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::build(ResponseError::status_code(self)).json(self.to_error_response())
     }
 }
 
@@ -139,17 +175,8 @@ mod tests {
 
     #[test]
     fn test_error_status_codes() {
-        assert_eq!(
-            AppError::NotFound("test".to_string()).status_code(),
-            StatusCode::NOT_FOUND
-        );
-        assert_eq!(
-            AppError::Validation("test".to_string()).status_code(),
-            StatusCode::BAD_REQUEST
-        );
-        assert_eq!(
-            AppError::RateLimitExceeded.status_code(),
-            StatusCode::TOO_MANY_REQUESTS
-        );
+        assert_eq!(AppError::NotFound("test".to_string()).status_code(), 404);
+        assert_eq!(AppError::Validation("test".to_string()).status_code(), 400);
+        assert_eq!(AppError::RateLimitExceeded.status_code(), 429);
     }
 }

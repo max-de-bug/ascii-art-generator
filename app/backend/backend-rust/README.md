@@ -2,6 +2,13 @@
 
 A high-performance Rust backend for indexing Solana transactions and tracking NFT mints with a user leveling system. This is a rewrite of the original NestJS backend in Rust for improved performance and reliability.
 
+## Deployment Options
+
+This backend supports two deployment modes:
+
+1. **Vercel Serverless** - Deploy as serverless functions on Vercel
+2. **Standalone Server** - Run as a traditional server (with indexer)
+
 ## Features
 
 - ✅ **Solana Transaction Indexer**: Listens to real-time transactions from your Anchor program
@@ -19,6 +26,66 @@ A high-performance Rust backend for indexing Solana transactions and tracking NF
 - Rust 1.70+ (install via [rustup](https://rustup.rs/))
 - PostgreSQL 14+
 - Solana RPC endpoint (mainnet or devnet)
+
+---
+
+## Vercel Serverless Deployment
+
+Deploy the API as serverless functions on Vercel.
+
+### 1. Install Vercel CLI
+
+```bash
+npm i -g vercel
+vercel login
+```
+
+### 2. Configure Environment Variables
+
+In the Vercel dashboard, add these environment variables:
+
+```
+DB_HOST=your-project.supabase.co
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=your_password
+DB_NAME=postgres
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+SOLANA_PROGRAM_ID=56cKjpFg9QjDsRCPrHnj1efqZaw2cvfodNhz4ramoXxt
+SOLANA_NETWORK=mainnet-beta
+SOLANA_COMMITMENT=confirmed
+```
+
+### 3. Deploy
+
+```bash
+cd app/backend/backend-rust
+vercel --prod
+```
+
+### 4. API Endpoints (Serverless)
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Health check |
+| `GET /nft/user/{wallet}` | Get user NFTs and level |
+| `GET /nft/user/{wallet}/level` | Get user level |
+| `GET /nft/user/{wallet}/shard-status` | Get user shard status |
+| `GET /nft/mint/{mint}` | Get NFT by mint |
+| `GET /nft/statistics` | Get statistics |
+| `GET /nft/buybacks` | Get buyback events |
+| `GET /nft/indexer/status` | Get indexer status |
+
+### Important Notes for Serverless
+
+⚠️ **Indexer**: The Solana transaction indexer does NOT run in serverless mode. You have two options:
+
+1. **Separate Indexer Service**: Run the standalone server on a VPS/container (Railway, Fly.io, etc.) just for indexing
+2. **Vercel Cron Jobs**: Set up a cron job to periodically index new transactions
+
+The serverless API endpoints work for read operations (fetching NFTs, user data, statistics).
+
+---
 
 ## Setup
 
