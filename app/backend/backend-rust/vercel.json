@@ -1,92 +1,29 @@
 {
+  "framework": null,
+  "buildCommand": null,
+  "devCommand": null,
+  "installCommand": null,
+  "outputDirectory": "public",
   "functions": {
     "api/**/*.rs": {
-      "runtime": "vercel-rust@5.0.0",
+      "runtime": "vercel-rust@4.0.9",
       "maxDuration": 30
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/health",
-      "dest": "/api/health.rs"
+      "source": "/api/(.*)",
+      "destination": "/api/router"
     },
     {
-      "src": "/api/nft/user/([^/]+)/level",
-      "dest": "/api/user_level.rs?wallet=$1"
+      "source": "/health",
+      "destination": "/api/router"
     },
     {
-      "src": "/api/nft/user/([^/]+)/shard-status",
-      "dest": "/api/user_shard_status.rs?wallet=$1"
-    },
-    {
-      "src": "/api/nft/user/([^/]+)",
-      "dest": "/api/user_nfts.rs?wallet=$1"
-    },
-    {
-      "src": "/api/nft/mint/([^/]+)",
-      "dest": "/api/nft_by_mint.rs?mint=$1"
-    },
-    {
-      "src": "/api/nft/statistics",
-      "dest": "/api/statistics.rs"
-    },
-    {
-      "src": "/api/nft/indexer/status",
-      "dest": "/api/indexer_status.rs"
-    },
-    {
-      "src": "/api/nft/buybacks/statistics",
-      "dest": "/api/statistics.rs"
-    },
-    {
-      "src": "/api/nft/buybacks",
-      "dest": "/api/buybacks.rs"
-    },
-    {
-      "src": "/health",
-      "dest": "/api/health.rs"
-    },
-    {
-      "src": "/nft/user/([^/]+)/level",
-      "dest": "/api/user_level.rs?wallet=$1"
-    },
-    {
-      "src": "/nft/user/([^/]+)/shard-status",
-      "dest": "/api/user_shard_status.rs?wallet=$1"
-    },
-    {
-      "src": "/nft/user/([^/]+)",
-      "dest": "/api/user_nfts.rs?wallet=$1"
-    },
-    {
-      "src": "/nft/mint/([^/]+)",
-      "dest": "/api/nft_by_mint.rs?mint=$1"
-    },
-    {
-      "src": "/nft/statistics",
-      "dest": "/api/statistics.rs"
-    },
-    {
-      "src": "/nft/indexer/status",
-      "dest": "/api/indexer_status.rs"
-    },
-    {
-      "src": "/nft/buybacks/statistics",
-      "dest": "/api/statistics.rs"
-    },
-    {
-      "src": "/nft/buybacks",
-      "dest": "/api/buybacks.rs"
+      "source": "/nft/(.*)",
+      "destination": "/api/router"
     }
   ],
-  "env": {
-    "RUST_BACKTRACE": "1"
-  },
-  "build": {
-    "env": {
-      "RUST_BACKTRACE": "1"
-    }
-  },
   "headers": [
     {
       "source": "/api/(.*)",
@@ -95,7 +32,34 @@
         { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
       ]
+    },
+    {
+      "source": "/nft/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization" }
+      ]
+    },
+    {
+      "source": "/health",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+      ]
     }
-  ]
+  ],
+  "env": {
+    "RUST_BACKTRACE": "1"
+  },
+  "build": {
+    "env": {
+      "RUST_BACKTRACE": "1",
+      "CARGO_BUILD_JOBS": "1",
+      "CARGO_NET_GIT_FETCH_WITH_CLI": "true",
+      "RUSTFLAGS": "-C link-arg=-s",
+      "CARGO_INCREMENTAL": "0"
+    }
+  }
 }
-

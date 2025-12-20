@@ -67,7 +67,8 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
 }
 
 /// Create a database connection pool with TLS support
-pub fn create_db_pool(db_config: &DatabaseConfig) -> Result<Pool, Box<dyn std::error::Error>> {
+/// This function should be called within an async context (e.g., inside a handler)
+pub async fn create_db_pool(db_config: &DatabaseConfig) -> Result<Pool, Box<dyn std::error::Error>> {
     // Initialize TLS crypto provider
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -79,15 +80,32 @@ pub fn create_db_pool(db_config: &DatabaseConfig) -> Result<Pool, Box<dyn std::e
     pg_config.dbname = Some(db_config.name.clone());
 
     // Configure TLS for Supabase
-    let tls_config = rustls::ClientConfig::builder()
-        .dangerous()
-        .with_custom_certificate_verifier(Arc::new(NoVerifier))
-        .with_no_client_auth();
+    // Create TLS config builder function to reuse
+    let tls_config_builder = || {
+        rustls::ClientConfig::builder()
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(NoVerifier))
+            .with_no_client_auth()
+    };
+    
+    let tls_config = tls_config_builder();
     let tls = MakeRustlsConnect::new(tls_config);
 
-    let pool = pg_config
-        .create_pool(Some(Runtime::Tokio1), tls)
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+    // Try to use None first to let deadpool detect the current runtime
+    // If that fails, recreate the TLS connector and fall back to Tokio1
+    // This avoids creating a new runtime that might conflict with vercel_runtime
+    let pool = match pg_config.create_pool(None, tls) {
+        Ok(p) => p,
+        Err(_) => {
+            // Fallback to Tokio1 if None doesn't work
+            // Recreate TLS connector since it was moved
+            let tls_config_fallback = tls_config_builder();
+            let tls_fallback = MakeRustlsConnect::new(tls_config_fallback);
+            pg_config
+                .create_pool(Some(Runtime::Tokio1), tls_fallback)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+        }
+    };
 
     Ok(pool)
 }

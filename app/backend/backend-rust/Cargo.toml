@@ -13,38 +13,10 @@ path = "src/lib.rs"
 name = "server"
 path = "src/main.rs"
 
-# Vercel serverless function binaries
+# Vercel serverless function binary (reduced to 1 for maximum memory optimization)
 [[bin]]
-name = "health"
-path = "api/health.rs"
-
-[[bin]]
-name = "user_nfts"
-path = "api/user_nfts.rs"
-
-[[bin]]
-name = "user_level"
-path = "api/user_level.rs"
-
-[[bin]]
-name = "user_shard_status"
-path = "api/user_shard_status.rs"
-
-[[bin]]
-name = "nft_by_mint"
-path = "api/nft_by_mint.rs"
-
-[[bin]]
-name = "statistics"
-path = "api/statistics.rs"
-
-[[bin]]
-name = "buybacks"
-path = "api/buybacks.rs"
-
-[[bin]]
-name = "indexer_status"
-path = "api/indexer_status.rs"
+name = "router"
+path = "api/router.rs"
 
 [dependencies]
 # Web framework (for standalone server)
@@ -56,7 +28,11 @@ actix-rt = "2"
 vercel_runtime = "2.1"
 
 # Async runtime
-tokio = { version = "1", features = ["full", "sync"] }
+# Use minimal features to avoid port binding conflicts in serverless
+# "rt" = async runtime, "time" = timers
+# "sync" = synchronization primitives, "macros" = async/await support
+# Removed "io-util" as it might include network utilities that bind to ports
+tokio = { version = "1", features = ["rt", "time", "sync", "macros"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -134,6 +110,16 @@ tokio-test = "0.4"
 mockall = "0.13"
 
 [profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
+opt-level = 2        # Balance between speed and memory usage (3 uses more memory)
+lto = false          # Disable LTO to reduce memory usage during build (saves ~2-4GB)
+codegen-units = 16   # More units = less memory per unit during compilation
+strip = "debuginfo"  # Strip debug info to reduce binary size
+panic = "abort"      # Smaller binaries, no unwinding code
+
+# Optimize dev builds to use less memory
+[profile.dev]
+opt-level = 0    # No optimization = faster compilation, less memory
+incremental = true
+debug = false     # Disable debug info to reduce memory usage
+strip = true      # Strip symbols to reduce binary size
+debug-assertions = false  # Disable debug assertions

@@ -1,0 +1,55 @@
+name: Build and Deploy Rust Backend to Vercel
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/backend/backend-rust/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            app/backend/backend-rust/target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('app/backend/backend-rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel Environment Information
+        working-directory: app/backend/backend-rust
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Project
+        working-directory: app/backend/backend-rust
+        env:
+          CARGO_BUILD_JOBS: 1
+          CARGO_INCREMENTAL: 0
+          RUSTFLAGS: "-C link-arg=-s"
+        run: |
+          # Build the single router binary
+          cargo build --release --bin router
+
+      - name: Deploy Project Artifacts to Vercel
+        working-directory: app/backend/backend-rust
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+

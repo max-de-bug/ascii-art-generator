@@ -188,14 +188,20 @@ async fn main() -> std::io::Result<()> {
         .map(|s| s.trim().to_string())
         .collect();
 
+    // Use PORT environment variable if available (for Vercel/cloud deployments)
+    // Otherwise fall back to config.server.port
+    let server_port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(config.server.port);
+    
     info!(
         "Starting server on http://{}:{}",
-        config.server.host, config.server.port
+        config.server.host, server_port
     );
     info!("CORS allowed origins: {:?}", allowed_origins);
 
     let server_host = config.server.host.clone();
-    let server_port = config.server.port;
 
     HttpServer::new(move || {
         // Configure CORS

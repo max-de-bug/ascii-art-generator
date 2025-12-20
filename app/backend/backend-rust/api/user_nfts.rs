@@ -22,9 +22,16 @@ struct UserNftsResponse {
     total_nfts: usize,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    run(service_fn(handler)).await
+fn main() -> Result<(), Error> {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.block_on(run(service_fn(handler)))
+    } else {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .map_err(|e| Error::from(format!("Failed to create runtime: {}", e)))?;
+        rt.block_on(run(service_fn(handler)))
+    }
 }
 
 async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
@@ -66,7 +73,7 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
         }
     };
 
-    let pool = match create_db_pool(&config.database) {
+    let pool = match create_db_pool(&config.database).await {
         Ok(p) => p,
         Err(e) => {
             return error_response(

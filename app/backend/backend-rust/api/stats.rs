@@ -1,20 +1,27 @@
-//! User Level endpoint for Vercel serverless
+//! Statistics endpoints for Vercel serverless
 //!
-//! GET /api/user_level?wallet=<address>
-//! Returns the level information for a user
+//! GET /api/statistics - Overall statistics
+//! GET /api/buybacks?limit=<num>&offset=<num> - Buyback events
 
 use ascii_art_backend::{
     create_db_pool, AppConfig,
-    models::user_level::UserLevelResponse,
+    models::buyback_event::BuybackEventResponse,
     services::nft_storage::NftStorageService,
 };
 use http::StatusCode;
 use serde_json::json;
 use vercel_runtime::{run, service_fn, Error, Request, Response, ResponseBody};
 
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    run(service_fn(handler)).await
+fn main() -> Result<(), Error> {
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        handle.block_on(run(service_fn(handler)))
+    } else {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .map_err(|e| Error::from(format!("Failed to create runtime: {}", e)))?;
+        rt.block_on(run(service_fn(handler)))
+    }
 }
 
 async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
@@ -29,20 +36,8 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
             .body("".into())?);
     }
 
-    // Parse wallet address from query or path
+    let path = req.uri().path();
     let url = req.uri().to_string();
-    let wallet_address = extract_query_param(&url, "wallet")
-        .or_else(|| extract_path_param(&url))
-        .unwrap_or_default();
-
-    // Validate wallet address
-    if wallet_address.len() < 32 || wallet_address.len() > 44 {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "VALIDATION_ERROR",
-            "Invalid wallet address",
-        );
-    }
 
     // Initialize configuration and database
     let config = match AppConfig::from_env() {
@@ -56,7 +51,7 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
         }
     };
 
-    let pool = match create_db_pool(&config.database) {
+    let pool = match create_db_pool(&config.database).await {
         Ok(p) => p,
         Err(e) => {
             return error_response(
@@ -78,31 +73,54 @@ async fn handler(req: Request) -> Result<Response<ResponseBody>, Error> {
         }
     };
 
-    let user_level = match nft_storage.get_user_level(&wallet_address).await {
-        Ok(ul) => ul,
-        Err(e) => {
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "DATABASE_ERROR",
-                &format!("Error fetching user level: {}", e),
-            );
-        }
-    };
+    // Route based on path
+    if path.contains("buybacks") {
+        // Buybacks endpoint
+        let limit: i64 = extract_query_param(&url, "limit")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(50)
+            .min(100);
+        let offset: i64 = extract_query_param(&url, "offset")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
 
-    match user_level {
-        Some(level) => {
-            let response: UserLevelResponse = level.into();
-            Ok(Response::builder()
-                .status(StatusCode::OK)
-                .header("Content-Type", "application/json")
-                .header("Access-Control-Allow-Origin", "*")
-                .body(serde_json::to_string(&response)?.into())?)
-        }
-        None => Ok(Response::builder()
+        let events = match nft_storage.get_buyback_events(limit, offset).await {
+            Ok(e) => e,
+            Err(e) => {
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "DATABASE_ERROR",
+                    &format!("Error fetching buyback events: {}", e),
+                );
+            }
+        };
+
+        let response: Vec<BuybackEventResponse> = events.into_iter().map(|e| e.into()).collect();
+
+        Ok(Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "application/json")
             .header("Access-Control-Allow-Origin", "*")
-            .body("null".into())?),
+            .body(serde_json::to_string(&response)?.into())?)
+    } else {
+        // Statistics endpoint (default)
+        let stats = match nft_storage.get_statistics().await {
+            Ok(s) => s,
+            Err(e) => {
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "DATABASE_ERROR",
+                    &format!("Error fetching statistics: {}", e),
+                );
+            }
+        };
+
+        Ok(Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Cache-Control", "public, max-age=60")
+            .body(serde_json::to_string(&stats)?.into())?)
     }
 }
 
@@ -119,22 +137,6 @@ fn extract_query_param(url: &str, param: &str) -> Option<String> {
                 }
             })
         })
-}
-
-fn extract_path_param(url: &str) -> Option<String> {
-    let path = url.split('?').next()?;
-    let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-    
-    if let Some(user_idx) = segments.iter().position(|s| *s == "user") {
-        if user_idx + 1 < segments.len() {
-            let wallet = segments[user_idx + 1];
-            if wallet != "level" {
-                return Some(wallet.to_string());
-            }
-        }
-    }
-    
-    None
 }
 
 fn error_response(
@@ -155,3 +157,4 @@ fn error_response(
             .into(),
         )?)
 }
+
