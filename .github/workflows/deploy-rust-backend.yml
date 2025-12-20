@@ -37,11 +37,66 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Prepare Deployment (Remove source files that trigger builds)
+        working-directory: app/backend/backend-rust
+        run: |
+          # CRITICAL: Completely remove api directory to prevent any detection
+          if [ -d api ]; then
+            mv api api.backup
+            echo "✓ Moved api directory to api.backup"
+          fi
+          
+          # Remove functions config from vercel.json
+          python3 << 'PYEOF'
+import json
+import shutil
+
+shutil.copy('vercel.json', 'vercel.json.backup')
+
+with open('vercel.json', 'r') as f:
+    config = json.load(f)
+
+if 'functions' in config:
+    del config['functions']
+    print("✓ Removed functions config from vercel.json")
+
+with open('vercel.json', 'w') as f:
+    json.dump(config, f, indent=2)
+PYEOF
+          
+          # Verify cleanup
+          if [ -d api ]; then
+            echo "ERROR: api directory still exists!"
+            exit 1
+          fi
+          if grep -q '"functions"' vercel.json; then
+            echo "ERROR: functions config still exists!"
+            exit 1
+          fi
+          echo "✓ Source files removed, ready for Build Output API deployment"
+
       - name: Pull Vercel Environment Information
         working-directory: app/backend/backend-rust
         run: |
-          # Pull environment info but don't let it override our build approach
-          vercel pull --yes --environment=production --token=$VERCEL_TOKEN || echo "Note: vercel pull completed (may have warnings)"
+          # Pull environment variables
+          vercel pull --yes --environment=production --token=$VERCEL_TOKEN || echo "Note: vercel pull completed"
+          
+          # CRITICAL: Ensure functions config is still removed after vercel pull
+          python3 << 'PYEOF'
+import json
+
+with open('vercel.json', 'r') as f:
+    config = json.load(f)
+
+if 'functions' in config:
+    print("WARNING: functions config restored by vercel pull, removing again...")
+    del config['functions']
+    with open('vercel.json', 'w') as f:
+        json.dump(config, f, indent=2)
+    print("✓ Removed functions config again")
+else:
+    print("✓ functions config is still removed (good)")
+PYEOF
 
       - name: Build Project
         working-directory: app/backend/backend-rust
@@ -58,61 +113,100 @@ jobs:
         run: |
           # Verify the binary was built successfully
           if [ ! -f target/release/router ]; then
-            echo "Error: router binary not found in target/release/"
+            echo "Error: router binary not found"
             exit 1
           fi
           
-          echo "Binary built successfully"
-          ls -lh target/release/router
+          echo "✓ Binary ready: $(ls -lh target/release/router | awk '{print $5}')"
           
-          # Create .vercel/output structure manually for Build Output API
-          # This allows us to deploy prebuilt binaries without triggering a build
+          # Create Build Output API structure
+          # This completely bypasses Vercel's build system
           mkdir -p .vercel/output/functions/api/router.func
           
-          # Copy the prebuilt binary to the function directory
+          # Copy binary (Vercel expects 'bootstrap' for provided.al2 runtime)
           cp target/release/router .vercel/output/functions/api/router.func/bootstrap
           chmod +x .vercel/output/functions/api/router.func/bootstrap
           
-          # Create function configuration for vercel-rust runtime
-          # Note: vercel-rust expects 'bootstrap' as the binary name
+          # Create function config using provided.al2 runtime (runs binaries directly)
           cat > .vercel/output/functions/api/router.func/.vc-config.json << 'EOF'
           {
             "runtime": "provided.al2",
             "handler": "bootstrap",
-            "launcherType": "bootstrap"
+            "launcherType": "bootstrap",
+            "memory": 1024,
+            "maxDuration": 30
           }
           EOF
           
-          # Create the main config.json with routes and headers from vercel.json
+          # Create main config.json (restore from backup to get original routes/headers)
           python3 << 'PYEOF'
 import json
 import os
 
-# Read vercel.json
-with open('vercel.json', 'r') as f:
-    vconfig = json.load(f)
+# Read from backup to get original config (without functions)
+with open('vercel.json.backup', 'r') as f:
+    orig_config = json.load(f)
 
-# Create output config
+# Remove functions if it exists
+if 'functions' in orig_config:
+    del orig_config['functions']
+
 output_config = {
     "version": 3,
-    "routes": vconfig.get('rewrites', []),
-    "headers": vconfig.get('headers', [])
+    "routes": orig_config.get('rewrites', []),
+    "headers": orig_config.get('headers', [])
 }
 
-# Write config.json
 os.makedirs('.vercel/output', exist_ok=True)
 with open('.vercel/output/config.json', 'w') as f:
     json.dump(output_config, f, indent=2)
 
-print("Created Build Output API structure")
+print("✓ Created Build Output API structure")
 PYEOF
           
-          echo "Build output structure:"
-          tree .vercel/output -L 4 2>/dev/null || find .vercel/output -type f
+          # Verify no .rs files are in the output structure
+          if find .vercel/output -name "*.rs" 2>/dev/null | grep -q .; then
+            echo "ERROR: Found .rs files in output structure!"
+            find .vercel/output -name "*.rs"
+            exit 1
+          fi
+          
+          echo "✓ Output structure created (no .rs files)"
 
       - name: Deploy Using Build Output API
         working-directory: app/backend/backend-rust
         run: |
-          # Deploy using Build Output API (bypasses build process)
-          vercel deploy --prebuilt --prod
+          # Verify .vercel/output exists
+          if [ ! -d .vercel/output ]; then
+            echo "ERROR: .vercel/output directory not found!"
+            exit 1
+          fi
+          
+          # Final verification: ensure no .rs files are visible
+          echo "Checking for .rs files in deployment directory..."
+          if find . -name "*.rs" -not -path "./.rs-backup/*" -not -path "./.git/*" 2>/dev/null | head -5; then
+            echo "WARNING: Found .rs files in deployment directory"
+          else
+            echo "✓ No .rs files found (good)"
+          fi
+          
+          # Verify functions config is removed
+          if grep -q '"functions"' vercel.json 2>/dev/null; then
+            echo "ERROR: functions config still exists in vercel.json!"
+            exit 1
+          fi
+          
+          # Deploy using Build Output API with --prebuilt flag
+          # This should ONLY use .vercel/output and ignore source files
+          echo "Deploying with --prebuilt flag..."
+          vercel deploy --prebuilt --prod --yes
+          
+          # Restore files for next build
+          if [ -f vercel.json.backup ]; then
+            mv vercel.json.backup vercel.json
+          fi
+          if [ -d api.backup ]; then
+            mv api.backup api
+            echo "✓ Restored api directory"
+          fi
 
