@@ -10,6 +10,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -37,8 +39,6 @@ jobs:
 
       - name: Pull Vercel Environment Information
         working-directory: app/backend/backend-rust
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel pull --yes --environment=production
 
       - name: Build Project
@@ -53,7 +53,5 @@ jobs:
 
       - name: Deploy Project Artifacts to Vercel
         working-directory: app/backend/backend-rust
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: vercel deploy --prebuilt --prod
 
