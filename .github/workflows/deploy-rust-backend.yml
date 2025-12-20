@@ -37,6 +37,19 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
+      - name: Hide .rs Files (Prevent Vercel from Building)
+        working-directory: app/backend/backend-rust
+        run: |
+          # Move .rs files BEFORE any vercel commands run
+          # This prevents vercel-rust runtime from detecting and trying to build them
+          if [ -d api ]; then
+            mkdir -p .rs-backup
+            find api -name "*.rs" -type f -exec mv {} .rs-backup/ \; 2>/dev/null || true
+            echo "Moved .rs files to .rs-backup"
+            echo "Files remaining in api/:"
+            ls -la api/ 2>/dev/null || echo "(empty)"
+          fi
+
       - name: Pull Vercel Environment Information
         working-directory: app/backend/backend-rust
         run: vercel pull --yes --environment=production
@@ -64,22 +77,10 @@ jobs:
           echo "Binary built successfully at: target/release/router"
           ls -lh target/release/router
 
-      - name: Build with Vercel (creates output structure)
+      - name: Deploy Project Artifacts to Vercel  
         working-directory: app/backend/backend-rust
         run: |
-          # Run vercel build to create output structure
-          # The buildCommand=true will skip actual building
-          # But we need to copy our binary into the output
-          vercel build --prod || echo "Build completed (may have warnings)"
-          
-          # Copy our prebuilt binary to the output structure
-          if [ -d .vercel/output ]; then
-            find .vercel/output -type d -name "api" -exec cp target/release/router {}/router \;
-            find .vercel/output -name "router" -exec chmod +x {} \;
-            echo "Binary copied to Vercel output structure"
-          fi
-
-      - name: Deploy Project Artifacts to Vercel
-        working-directory: app/backend/backend-rust
-        run: vercel deploy --prebuilt --prod
+          # Deploy with --prebuilt flag
+          # Since .rs files are already hidden, vercel-rust won't find them to build
+          vercel deploy --prebuilt --prod
 
