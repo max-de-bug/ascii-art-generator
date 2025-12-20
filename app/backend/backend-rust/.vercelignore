@@ -1,8 +1,4 @@
-# Ignore .rs files and source directories during deployment
+# Ignore .rs files during deployment to prevent vercel-rust from trying to build them
 # We're using prebuilt binaries from GitHub Actions instead
 api/**/*.rs
-src/**/*
-target/**/*
-Cargo.toml
-Cargo.lock
 
