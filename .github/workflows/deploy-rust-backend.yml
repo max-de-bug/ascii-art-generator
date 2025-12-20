@@ -76,11 +76,43 @@ jobs:
           
           echo "Binary built successfully at: target/release/router"
           ls -lh target/release/router
+          
+          # Temporarily remove functions config from vercel.json to prevent .rs file detection
+          # We'll restore it after deployment
+          python3 << 'PYEOF'
+import json
+import shutil
+
+# Backup original
+shutil.copy('vercel.json', 'vercel.json.original')
+
+# Read config
+with open('vercel.json', 'r') as f:
+    config = json.load(f)
+
+# Save functions config to restore later
+if 'functions' in config:
+    with open('.functions_backup.json', 'w') as f:
+        json.dump(config['functions'], f)
+    del config['functions']
+    print("Temporarily removed functions config from vercel.json")
+
+# Write modified config
+with open('vercel.json', 'w') as f:
+    json.dump(config, f, indent=2)
+PYEOF
 
       - name: Deploy Project Artifacts to Vercel  
         working-directory: app/backend/backend-rust
         run: |
-          # Deploy with --prebuilt flag
-          # Since .rs files are already hidden, vercel-rust won't find them to build
-          vercel deploy --prebuilt --prod
+          # Deploy without --prebuilt flag and without functions config
+          # This prevents Vercel from trying to build .rs files
+          vercel deploy --prod
+          
+          # Restore original vercel.json
+          if [ -f vercel.json.original ]; then
+            mv vercel.json.original vercel.json
+            rm -f .functions_backup.json
+            echo "Restored original vercel.json"
+          fi
 
