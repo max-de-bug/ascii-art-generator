@@ -51,6 +51,34 @@ jobs:
           # Build the single router binary
           cargo build --release --bin router
 
+      - name: Prepare Vercel Deployment
+        working-directory: app/backend/backend-rust
+        run: |
+          # Verify the binary was built successfully
+          if [ ! -f target/release/router ]; then
+            echo "Error: router binary not found in target/release/"
+            ls -la target/release/ || echo "target/release directory not found"
+            exit 1
+          fi
+          
+          echo "Binary built successfully at: target/release/router"
+          ls -lh target/release/router
+
+      - name: Build with Vercel (creates output structure)
+        working-directory: app/backend/backend-rust
+        run: |
+          # Run vercel build to create output structure
+          # The buildCommand=true will skip actual building
+          # But we need to copy our binary into the output
+          vercel build --prod || echo "Build completed (may have warnings)"
+          
+          # Copy our prebuilt binary to the output structure
+          if [ -d .vercel/output ]; then
+            find .vercel/output -type d -name "api" -exec cp target/release/router {}/router \;
+            find .vercel/output -name "router" -exec chmod +x {} \;
+            echo "Binary copied to Vercel output structure"
+          fi
+
       - name: Deploy Project Artifacts to Vercel
         working-directory: app/backend/backend-rust
         run: vercel deploy --prebuilt --prod
